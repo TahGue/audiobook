@@ -156,97 +156,73 @@ class ArabicTextService:
     def fix_presentation_forms(self, text: str) -> str:
         """
         Convert Arabic Presentation Forms to standard Arabic.
-        Presentation forms are glyph shapes, not logical characters.
+        Uses unicodedata to decompose presentation forms.
         """
-        # Map common presentation forms to standard Arabic
-        # This is a simplified mapping - full mapping would be extensive
-        presentation_to_standard = {
-            '\ufb50': '\u0671',  # ARABIC LETTER ALEF WASLA ISOLATED FORM
-            '\ufb51': '\u0671',
-            '\ufb52': '\u067b',  # ARABIC LETTER BEEH ISOLATED FORM
-            '\ufb56': '\u067e',  # ARABIC LETTER PEH ISOLATED FORM
-            '\ufb5a': '\u0680',  # ARABIC LETTER BEHEH ISOLATED FORM
-            '\ufb5e': '\u067a',  # ARABIC LETTER TTEHEH ISOLATED FORM
-            '\ufb62': '\u067f',  # ARABIC LETTER TEHEH ISOLATED FORM
-            '\ufb66': '\u0683',  # ARABIC LETTER NYEH ISOLATED FORM
-            '\ufb70': '\u0684',  # ARABIC LETTER DYEH ISOLATED FORM
-            '\ufb74': '\u0685',  # ARABIC LETTER DYEH ISOLATED FORM
-            '\ufb78': '\u0686',  # ARABIC LETTER TCHEH ISOLATED FORM
-            '\ufb7c': '\u0687',  # ARABIC LETTER TCHEHEH ISOLATED FORM
-            '\ufb80': '\u0688',  # ARABIC LETTER DDAL ISOLATED FORM
-            '\ufb84': '\u0689',  # ARABIC LETTER DAL WITH RING
-            '\ufb88': '\u068a',  # ARABIC LETTER DAL WITH RING
-            '\ufb8c': '\u068b',  # ARABIC LETTER DAL WITH RING
-            '\ufb90': '\u068c',  # ARABIC LETTER DAHAL ISOLATED FORM
-            '\ufb94': '\u068d',  # ARABIC LETTER DAL WITH RING
-            '\ufb98': '\u068e',  # ARABIC LETTER DAL WITH RING
-            '\ufb9c': '\u068f',  # ARABIC LETTER DAL WITH RING
-            '\ufba0': '\u0690',  # ARABIC LETTER DAL WITH RING
-            '\ufba4': '\u0691',  # ARABIC LETTER RREH ISOLATED FORM
-            '\ufba8': '\u0692',  # ARABIC LETTER DAL WITH RING
-            '\ufbac': '\u0693',  # ARABIC LETTER DAL WITH RING
-            '\ufbb0': '\u0694',  # ARABIC LETTER DAL WITH RING
-            '\ufbb4': '\u0695',  # ARABIC LETTER DAL WITH RING
-            '\ufbb8': '\u0696',  # ARABIC LETTER DAL WITH RING
-            '\ufbbc': '\u0697',  # ARABIC LETTER DAL WITH RING
-            '\ufbc0': '\u0698',  # ARABIC LETTER JEH ISOLATED FORM
-            '\ufbc4': '\u0699',  # ARABIC LETTER DAL WITH RING
-            '\ufbd0': '\u069e',  # ARABIC LETTER DAL WITH RING
-            '\ufbd4': '\u06a0',  # ARABIC LETTER DAL WITH RING
-            '\ufbd8': '\u06a1',  # ARABIC LETTER DAL WITH RING
-            '\ufbdc': '\u06a2',  # ARABIC LETTER DAL WITH RING
-            '\ufbe0': '\u06a3',  # ARABIC LETTER DAL WITH RING
-            '\ufbe4': '\u06a4',  # ARABIC LETTER VEH ISOLATED FORM
-            '\ufbe8': '\u06a5',  # ARABIC LETTER DAL WITH RING
-            '\ufbec': '\u06a6',  # ARABIC LETTER PEHEH ISOLATED FORM
-            '\ufbf0': '\u06a7',  # ARABIC LETTER DAL WITH RING
-            '\ufbf4': '\u06a8',  # ARABIC LETTER DAL WITH RING
-            '\ufbf8': '\u06a9',  # ARABIC LETTER KEHEH ISOLATED FORM
-            '\ufbfc': '\u06aa',  # ARABIC LETTER DAL WITH RING
-            '\ufc00': '\u06ab',  # ARABIC LETTER DAL WITH RING
-            '\ufc04': '\u06ac',  # ARABIC LETTER DAL WITH RING
-            '\ufc08': '\u06ad',  # ARABIC LETTER DAL WITH RING
-            '\ufc0c': '\u06ae',  # ARABIC LETTER DAL WITH RING
-            '\ufc10': '\u06af',  # ARABIC LETTER GAF ISOLATED FORM
-        }
+        import unicodedata
         
-        # Replace presentation forms
-        for presentation, standard in presentation_to_standard.items():
-            text = text.replace(presentation, standard)
+        result = []
+        for char in text:
+            code = ord(char)
+            # Check if in Arabic Presentation Forms-A or B blocks
+            if 0xFB50 <= code <= 0xFDFF or 0xFE70 <= code <= 0xFEFF:
+                # Try to normalize to base Arabic form
+                try:
+                    # Many presentation forms normalize via NFKC
+                    normalized = unicodedata.normalize('NFKC', char)
+                    # If still a presentation form, try to map manually
+                    if 0xFB50 <= ord(normalized) <= 0xFEFF:
+                        # Use manual decomposition for remaining chars
+                        normalized = self._decompose_presentation_form(char)
+                    result.append(normalized)
+                except:
+                    result.append(char)
+            else:
+                result.append(char)
         
-        return text
+        return ''.join(result)
+    
+    def _decompose_presentation_form(self, char: str) -> str:
+        """Manually decompose a presentation form to base Arabic letter."""
+        code = ord(char)
+        
+        # Arabic Presentation Forms-A (FB50-FDFF)
+        if 0xFB50 <= code <= 0xFDFF:
+            # Map to base Arabic block (0600-06FF)
+            # This is a simplified mapping - covers common forms
+            base = code - 0xFB50 + 0x0671  # Approximate mapping
+            if 0x0600 <= base <= 0x06FF:
+                return chr(base)
+        
+        # Arabic Presentation Forms-B (FE70-FEFF)
+        if 0xFE70 <= code <= 0xFEFF:
+            # These map to base Arabic forms
+            base = code - 0xFE70 + 0x064B  # Approximate mapping
+            if 0x0600 <= base <= 0x06FF:
+                return chr(base)
+        
+        # Fallback: return original
+        return char
     
     def fix_rtl_display(self, text: str) -> str:
         """
         Fix RTL display issues using arabic-reshaper and python-bidi.
-        Smart reshaping: only reshapes if needed.
+        ALWAYS applies both reshape and bidi for any Arabic text with presentation forms.
         """
         try:
             import arabic_reshaper
             from bidi.algorithm import get_display
             
-            # Step 1: Convert presentation forms to standard Arabic if needed
-            if self.contains_presentation_forms(text):
-                text = self.fix_presentation_forms(text)
-            
-            # Step 2: Check if we need reshaping
-            # Don't reshape if already in proper form
-            if not self.should_reshape(text):
-                # Still apply bidi for display order
-                return get_display(text)
-            
-            # Step 3: Reshape for proper contextual forms
+            # arabic-reshaper handles presentation forms internally
+            # It converts glyph shapes to proper connected Arabic
             reshaped = arabic_reshaper.reshape(text)
             
-            # Step 4: Fix bidirectional display
+            # python-bidi fixes the visual order (LTR->RTL)
             fixed = get_display(reshaped)
             return fixed
             
         except ImportError:
-            # Fallback: just fix presentation forms manually
-            if self.contains_presentation_forms(text):
-                return self.fix_presentation_forms(text)
-            return text
+            # Fallback: basic presentation form fixing
+            return self.fix_presentation_forms(text)
     
     def clean_arabic_text(self, text: str) -> ArabicProcessingResult:
         """
