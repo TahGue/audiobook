@@ -156,30 +156,36 @@ class ArabicTextService:
     
     def fix_visual_order(self, text: str) -> str:
         """
-        Reverse each contiguous base Arabic character run.
-
-        PDFs store Arabic glyphs in visual (left-to-right) order, so characters
-        within each Arabic word appear in reverse reading order in the byte stream.
-        Reversing each run restores logical (right-to-left) reading order.
-
-        This method must be called AFTER normalize_unicode() so it operates
-        on base Arabic codepoints (0600-06FF), not presentation forms.
+        Reverse ONLY Arabic runs that appear visually reversed.
         """
-        return self._base_arabic_run.sub(lambda m: m.group()[::-1], text)
+        def should_reverse(run: str) -> bool:
+            # Presentation-form extracted Arabic is often reversed visually.
+            # Heuristic:
+            # reverse only if run contains presentation forms OR
+            # ends with common Arabic starters like ا ل م
+            if self.contains_presentation_forms(run):
+                return True
+            # already logical Arabic should not be reversed
+            # detect common prefixes
+            common_prefixes = (
+                "ال", "و", "ف", "ب", "ل", "ك"
+            )
+            for p in common_prefixes:
+                if run.startswith(p):
+                    return False
+            # reversed extracted words often end with these
+            for p in common_prefixes:
+                if run.endswith(p):
+                    return True
+            return False
 
-    def reshape_arabic(self, text: str) -> str:
-        """
-        Re-apply correct letter-connection forms using arabic-reshaper.
+        def process(match):
+            run = match.group()
+            if should_reverse(run):
+                return run[::-1]
+            return run
 
-        After NFKC + fix_visual_order, letters are in correct logical order but
-        may display with incorrect isolated forms. arabic_reshaper reconnects
-        them into the proper initial/medial/final/isolated shapes for rendering.
-        """
-        try:
-            import arabic_reshaper
-            return arabic_reshaper.reshape(text)
-        except ImportError:
-            return text
+        return self._base_arabic_run.sub(process, text)
 
     def fix_presentation_forms(self, text: str) -> str:
         """
@@ -205,8 +211,10 @@ class ArabicTextService:
           2. Remove tatweel
           3. Fix duplicates
           4. Fix disconnected letters
-          5. Fix visual order (reverse each Arabic run)
-          6. Reshape for display
+          5. Conditionally reverse visual runs
+        
+        NOTE: No reshape step - browsers handle Arabic shaping automatically.
+        arabic_reshaper is only needed for PIL/OpenCV/image rendering.
         """
         if not self.contains_arabic(text):
             return ArabicProcessingResult(
@@ -245,18 +253,12 @@ class ArabicTextService:
             fixes.append("connected_letters")
             confidence = min(confidence + 0.2, 1.0)
 
-        # Step 5: Fix visual order (reverse each Arabic character run)
-        # This is the PRIMARY fix for PDF-extracted Arabic.
+        # Step 5: Conditionally reverse visual runs
+        # Only reverse runs that contain presentation forms or appear visually reversed
         fixed_order = self.fix_visual_order(text)
         if fixed_order != text:
             text = fixed_order
             fixes.append("fixed_visual_order")
-
-        # Step 6: Reshape for correct letter-connection display forms
-        reshaped = self.reshape_arabic(text)
-        if reshaped != text:
-            text = reshaped
-            fixes.append("reshaped_arabic")
 
         return ArabicProcessingResult(
             text=text,
