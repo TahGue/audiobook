@@ -129,8 +129,12 @@ class ArabicTextService:
         return re.sub(r'(.)\1{2,}', r'\1', text)
     
     def normalize_unicode(self, text: str) -> str:
-        """Normalize Unicode to NFC form."""
-        return unicodedata.normalize('NFC', text)
+        """
+        Normalize Unicode using NFKC form.
+        NFKC decomposes Arabic Presentation Forms (FB50-FEFF) into their
+        standard Arabic equivalents (0600-06FF).
+        """
+        return unicodedata.normalize('NFKC', text)
     
     def fix_disconnected_letters(self, text: str) -> str:
         """Fix disconnected Arabic letters (common in OCR)."""
@@ -155,73 +159,29 @@ class ArabicTextService:
     
     def fix_presentation_forms(self, text: str) -> str:
         """
-        Convert Arabic Presentation Forms to standard Arabic.
-        Uses unicodedata to decompose presentation forms.
+        Convert Arabic Presentation Forms to standard Arabic via NFKC.
+        NFKC correctly decomposes presentation forms to base Arabic.
         """
-        import unicodedata
-        
         result = []
         for char in text:
             code = ord(char)
-            # Check if in Arabic Presentation Forms-A or B blocks
             if 0xFB50 <= code <= 0xFDFF or 0xFE70 <= code <= 0xFEFF:
-                # Try to normalize to base Arabic form
-                try:
-                    # Many presentation forms normalize via NFKC
-                    normalized = unicodedata.normalize('NFKC', char)
-                    # If still a presentation form, try to map manually
-                    if 0xFB50 <= ord(normalized) <= 0xFEFF:
-                        # Use manual decomposition for remaining chars
-                        normalized = self._decompose_presentation_form(char)
-                    result.append(normalized)
-                except:
-                    result.append(char)
+                normalized = unicodedata.normalize('NFKC', char)
+                result.append(normalized)
             else:
                 result.append(char)
-        
         return ''.join(result)
-    
-    def _decompose_presentation_form(self, char: str) -> str:
-        """Manually decompose a presentation form to base Arabic letter."""
-        code = ord(char)
-        
-        # Arabic Presentation Forms-A (FB50-FDFF)
-        if 0xFB50 <= code <= 0xFDFF:
-            # Map to base Arabic block (0600-06FF)
-            # This is a simplified mapping - covers common forms
-            base = code - 0xFB50 + 0x0671  # Approximate mapping
-            if 0x0600 <= base <= 0x06FF:
-                return chr(base)
-        
-        # Arabic Presentation Forms-B (FE70-FEFF)
-        if 0xFE70 <= code <= 0xFEFF:
-            # These map to base Arabic forms
-            base = code - 0xFE70 + 0x064B  # Approximate mapping
-            if 0x0600 <= base <= 0x06FF:
-                return chr(base)
-        
-        # Fallback: return original
-        return char
     
     def fix_rtl_display(self, text: str) -> str:
         """
-        Fix RTL display issues using arabic-reshaper and python-bidi.
-        ALWAYS applies both reshape and bidi for any Arabic text with presentation forms.
+        Fix Arabic text by reshaping presentation forms into logical Unicode order.
+        Removed get_display() - modern browsers handle RTL rendering.
         """
         try:
             import arabic_reshaper
-            from bidi.algorithm import get_display
-            
-            # arabic-reshaper handles presentation forms internally
-            # It converts glyph shapes to proper connected Arabic
             reshaped = arabic_reshaper.reshape(text)
-            
-            # python-bidi fixes the visual order (LTR->RTL)
-            fixed = get_display(reshaped)
-            return fixed
-            
+            return reshaped
         except ImportError:
-            # Fallback: basic presentation form fixing
             return self.fix_presentation_forms(text)
     
     def clean_arabic_text(self, text: str) -> ArabicProcessingResult:
