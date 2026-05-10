@@ -1,17 +1,31 @@
 """Dedicated Arabic text extraction and normalization service.
 
-Handles all the complexities of Arabic text processing:
-- RTL (right-to-left) layout
-- Unicode normalization
-- Ligatures and contextual shaping
-- Duplicate character removal
-- Tatweel (kashida) removal
-- Corruption detection
+ROOT CAUSE OF GARBLED ARABIC FROM PDFs
+=======================================
+Arabic PDFs store glyph codepoints in VISUAL order (left-to-right on the page),
+using Arabic Presentation Forms (Unicode FB50-FEFF) instead of base Arabic
+characters (0600-06FF). This means:
+
+  1. Characters within each Arabic run are stored in REVERSE reading order.
+  2. Codepoints are presentation-form glyphs, not base Arabic letters.
+  3. Word spacing is often lost entirely during glyph extraction.
+
+Correct fix pipeline:
+  NFKC normalize  →  reverse each Arabic run  →  reshape (optional, for display)
+
+  - NFKC:    converts presentation forms (FB50-FEFF) -> standard Arabic (0600-06FF)
+  - reverse: restores logical order from visual order within each Arabic run
+  - reshape: re-applies correct letter-connection forms for rendering
+
+Do NOT use get_display() (python-bidi) before storing text. get_display()
+converts logical -> visual order for raw pixel rendering. Browsers and modern
+UIs handle RTL themselves, so applying get_display() before storage causes
+the text to appear reversed again (double-flip).
 """
 
 import re
 import unicodedata
-from typing import Optional, Tuple
+from typing import Tuple
 from dataclasses import dataclass
 
 
@@ -26,64 +40,47 @@ class ArabicProcessingResult:
 
 class ArabicTextService:
     """Service for extracting and normalizing Arabic text from documents."""
-    
+
     def __init__(self):
-        self.arabic_range = re.compile(r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]')
-        # Presentation forms (extracted glyphs) vs standard Arabic
+        self.arabic_range = re.compile(
+            r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]'
+        )
         self.presentation_forms = re.compile(r'[\uFB50-\uFDFF\uFE70-\uFEFF]')
         self.standard_arabic = re.compile(r'[\u0600-\u06FF]')
-        self.tatweel = '\u0640'  # Kashida character
-        
+        # Matches a run of BASE Arabic characters (used after NFKC normalization)
+        self._base_arabic_run = re.compile(r'[\u0600-\u06FF]+')
+        self.tatweel = '\u0640'  # Kashida / tatweel character
+
+    # ------------------------------------------------------------------ #
+    # Detection helpers                                                    #
+    # ------------------------------------------------------------------ #
+
     def contains_arabic(self, text: str) -> bool:
-        """Check if text contains Arabic characters."""
         return bool(self.arabic_range.search(text))
-    
+
     def contains_presentation_forms(self, text: str) -> bool:
-        """Check if text contains Arabic Presentation Forms (extracted glyphs)."""
         return bool(self.presentation_forms.search(text))
-    
+
     def count_arabic_chars(self, text: str) -> int:
-        """Count Arabic characters in text."""
         return len(self.arabic_range.findall(text))
-    
+
     def should_reshape(self, text: str) -> bool:
-        """
-        Determine if text needs reshaping.
-        Returns True if text contains presentation forms that need conversion.
-        """
-        # If we have presentation forms, we likely need reshaping
-        presentation_count = len(self.presentation_forms.findall(text))
-        standard_count = len(self.standard_arabic.findall(text))
-        
-        # If mostly presentation forms, definitely reshape
-        if presentation_count > standard_count:
-            return True
-        
-        # If some presentation forms mixed in, probably needs fixing
-        if presentation_count > 5:
-            return True
-            
-        return False
-    
+        pf = len(self.presentation_forms.findall(text))
+        std = len(self.standard_arabic.findall(text))
+        return pf > std or pf > 5
+
     def is_corrupted(self, text: str) -> Tuple[bool, float]:
-        """
-        Detect if Arabic text is corrupted.
-        Returns (is_corrupted, confidence_score).
-        """
+        """Detect if Arabic text is corrupted. Returns (is_corrupted, confidence)."""
         if not self.contains_arabic(text):
             return False, 1.0
-            
+
         issues = []
-        
-        # Check 1: Very low Arabic ratio (might be garbled)
-        total_chars = len([c for c in text if c.isalpha()])
-        arabic_chars = self.count_arabic_chars(text)
-        if total_chars > 0:
-            arabic_ratio = arabic_chars / total_chars
-            if arabic_ratio < 0.3:  # Less than 30% Arabic
-                issues.append("low_arabic_ratio")
-        
-        # Check 2: Excessive duplicate characters
+
+        total_alpha = len([c for c in text if c.isalpha()])
+        arabic_count = self.count_arabic_chars(text)
+        if total_alpha > 0 and arabic_count / total_alpha < 0.3:
+            issues.append("low_arabic_ratio")
+
         dup_pattern = re.compile(r'(.)\1{3,}')  # 4+ same chars
         if dup_pattern.search(text):
             issues.append("excessive_duplicates")
@@ -157,6 +154,33 @@ class ArabicTextService:
         
         return text
     
+    def fix_visual_order(self, text: str) -> str:
+        """
+        Reverse each contiguous base Arabic character run.
+
+        PDFs store Arabic glyphs in visual (left-to-right) order, so characters
+        within each Arabic word appear in reverse reading order in the byte stream.
+        Reversing each run restores logical (right-to-left) reading order.
+
+        This method must be called AFTER normalize_unicode() so it operates
+        on base Arabic codepoints (0600-06FF), not presentation forms.
+        """
+        return self._base_arabic_run.sub(lambda m: m.group()[::-1], text)
+
+    def reshape_arabic(self, text: str) -> str:
+        """
+        Re-apply correct letter-connection forms using arabic-reshaper.
+
+        After NFKC + fix_visual_order, letters are in correct logical order but
+        may display with incorrect isolated forms. arabic_reshaper reconnects
+        them into the proper initial/medial/final/isolated shapes for rendering.
+        """
+        try:
+            import arabic_reshaper
+            return arabic_reshaper.reshape(text)
+        except ImportError:
+            return text
+
     def fix_presentation_forms(self, text: str) -> str:
         """
         Convert Arabic Presentation Forms to standard Arabic via NFKC.
@@ -171,30 +195,19 @@ class ArabicTextService:
             else:
                 result.append(char)
         return ''.join(result)
-    
-    def fix_rtl_display(self, text: str) -> str:
-        """
-        Fix Arabic text by reshaping presentation forms into logical Unicode order.
-        Removed get_display() - modern browsers handle RTL rendering.
-        """
-        try:
-            import arabic_reshaper
-            reshaped = arabic_reshaper.reshape(text)
-            return reshaped
-        except ImportError:
-            return self.fix_presentation_forms(text)
-    
+
     def clean_arabic_text(self, text: str) -> ArabicProcessingResult:
         """
         Full Arabic text cleaning pipeline.
-        Returns processed text with metadata about fixes.
+
+        Pipeline order matters:
+          1. NFKC normalization (presentation forms -> base Arabic)
+          2. Remove tatweel
+          3. Fix duplicates
+          4. Fix disconnected letters
+          5. Fix visual order (reverse each Arabic run)
+          6. Reshape for display
         """
-        original = text
-        fixes = []
-        
-        # Step 1: Check for corruption
-        is_corrupted, confidence = self.is_corrupted(text)
-        
         if not self.contains_arabic(text):
             return ArabicProcessingResult(
                 text=text,
@@ -202,49 +215,54 @@ class ArabicTextService:
                 fixes_applied=["no_arabic"],
                 confidence_score=1.0
             )
-        
-        # Step 2: Unicode normalization
+
+        original = text
+        fixes = []
+        is_corrupted, confidence = self.is_corrupted(text)
+
+        # Step 1: NFKC normalization (presentation forms -> base Arabic)
         text = self.normalize_unicode(text)
         if text != original:
-            fixes.append("unicode_normalization")
-        
-        # Step 3: Remove Tatweel (kashida)
-        text_no_tatweel = self.remove_tatweel(text)
-        if text_no_tatweel != text:
-            text = text_no_tatweel
+            fixes.append("unicode_normalization_nfkc")
+
+        # Step 2: Remove tatweel
+        no_tatweel = self.remove_tatweel(text)
+        if no_tatweel != text:
+            text = no_tatweel
             fixes.append("removed_tatweel")
-        
-        # Step 4: Fix duplicate characters
-        text_no_dupes = self.fix_duplicate_chars(text)
-        if text_no_dupes != text:
-            text = text_no_dupes
+
+        # Step 3: Collapse duplicate characters
+        no_dupes = self.fix_duplicate_chars(text)
+        if no_dupes != text:
+            text = no_dupes
             fixes.append("fixed_duplicates")
-            confidence += 0.2  # Boost confidence after fixing
-        
-        # Step 5: Fix disconnected letters
-        text_connected = self.fix_disconnected_letters(text)
-        if text_connected != text:
-            text = text_connected
+            confidence = min(confidence + 0.2, 1.0)
+
+        # Step 4: Rejoin disconnected letters
+        connected = self.fix_disconnected_letters(text)
+        if connected != text:
+            text = connected
             fixes.append("connected_letters")
-            confidence += 0.2
-        
-        # Step 6: Fix RTL display (if available)
-        try:
-            text_rtl = self.fix_rtl_display(text)
-            if text_rtl != text:
-                text = text_rtl
-                fixes.append("rtl_display_fix")
-        except Exception:
-            pass
-        
-        # Ensure confidence doesn't exceed 1.0
-        confidence = min(confidence, 1.0)
-        
+            confidence = min(confidence + 0.2, 1.0)
+
+        # Step 5: Fix visual order (reverse each Arabic character run)
+        # This is the PRIMARY fix for PDF-extracted Arabic.
+        fixed_order = self.fix_visual_order(text)
+        if fixed_order != text:
+            text = fixed_order
+            fixes.append("fixed_visual_order")
+
+        # Step 6: Reshape for correct letter-connection display forms
+        reshaped = self.reshape_arabic(text)
+        if reshaped != text:
+            text = reshaped
+            fixes.append("reshaped_arabic")
+
         return ArabicProcessingResult(
             text=text,
             was_corrupted=is_corrupted,
             fixes_applied=fixes,
-            confidence_score=confidence
+            confidence_score=min(confidence, 1.0)
         )
     
     def split_arabic_sentences(self, text: str) -> list:
