@@ -331,11 +331,14 @@ class ArabicTextService:
             try:
                 from services.ocr_service import OCROptions, OCREngine, ocr_service
 
+                print(f"[DEBUG] OCR fallback triggered, processing PDF with EasyOCR...")
                 ocr_result = ocr_service.process_pdf(
                     content,
                     OCROptions(languages=["ar", "en"], engine=OCREngine.EASYOCR, dpi=250),
+                    max_pages=5,  # Limit to first 5 pages for speed
                 )
                 ocr_text = ocr_result.get("text", "").strip()
+                print(f"[DEBUG] OCR extracted {len(ocr_text)} characters from {ocr_result.get('total_pages', 0)} pages")
                 if ocr_text:
                     cleaned_ocr = self.clean_arabic_text(ocr_text)
                     cleaned_ocr.fixes_applied.append("ocr_fallback")
@@ -344,7 +347,8 @@ class ArabicTextService:
                         float(ocr_result.get("average_confidence") or 0),
                     )
                     return cleaned_ocr
-            except Exception:
+            except Exception as e:
+                print(f"[DEBUG] OCR fallback failed: {e}")
                 result.fixes_applied.append("ocr_fallback_failed")
         
         return result
