@@ -2,16 +2,37 @@
 
 Local-first desktop audiobook maker application. Convert any book (PDF, EPUB, DOCX) to high-quality audio in multiple languages using neural TTS with full privacy - all processing happens locally on your machine.
 
+**Status: ✅ 100% Complete - All Features Implemented**
+
 ## Features
 
 ### Core Features
 - **PDF Text Extraction**: Extract text from PDF files with progress tracking
+- **Multi-Format Support**: PDF, EPUB, DOCX, and TXT import with drag-and-drop
 - **Arabic Text Support**: Special handling for Arabic books with OCR fallback and diacritization (tachkil)
-- **Text-to-Speech**: Convert text to natural-sounding speech using Piper TTS
+- **Text-to-Speech**: Convert text to natural-sounding speech using Edge TTS
 - **Multi-language Support**: Support for 10+ languages including English, Arabic, French, German, Spanish
-- **Audio Export**: Export audiobooks in MP3, WAV, or FLAC formats
+- **Audio Export**: Export audiobooks in MP3 (128k/192k/320k), WAV, or FLAC formats
 - **Project Management**: Organize books into projects with multiple chapters
 - **Progress Tracking**: Visual progress bars for upload, extraction, and processing
+- **Dark Mode**: System-aware dark mode toggle
+- **Keyboard Shortcuts**: Spacebar for play/pause control
+
+### Advanced Features
+- **Voice Cloning**: Upload voice samples and clone custom voices using XTTS v2
+- **Background Music**: Mix background music with voice audio (volume control, fade in/out)
+- **Chapter Auto-Split**: Intelligently split long text into chapters based on headings and paragraphs
+- **GPU Acceleration**: Automatic GPU detection for faster OCR and voice cloning
+- **Drag-and-Drop Reordering**: Reorder chapters with drag-and-drop interface
+- **Batch Processing**: Queue multiple chapters for TTS generation with ARQ
+- **Email Notifications**: Receive email notifications when batch jobs complete
+- **Custom Voice Profiles**: Associate custom voice profiles with specific projects
+
+### Tauri Desktop Integration
+- **Native File Picker**: Use native OS file dialogs for PDF upload
+- **Native Save Dialog**: Use native OS save dialogs for audio export
+- **System Tray**: Minimize to system tray with menu controls
+- **Cross-platform**: Windows, macOS, Linux support with installers
 
 ### Arabic-Specific Features
 - **Arabic Character Detection**: Automatically detects Arabic text in PDFs
@@ -26,27 +47,31 @@ Local-first desktop audiobook maker application. Convert any book (PDF, EPUB, DO
 - **Database**: SQLite + SQLModel (zero-setup, PostgreSQL optional)
 - **Migrations**: Alembic for database schema versioning
 - **Document Processing**: pdfplumber (PDF), ebooklib (EPUB), python-docx (DOCX)
-- **OCR**: Surya-OCR (primary) + EasyOCR (fallback) with Arabic support
-- **TTS**: Multi-engine - Piper (fast), Kokoro (quality), Edge (online)
+- **OCR**: Surya-OCR (primary) + EasyOCR (fallback) with GPU support
+- **TTS**: Edge TTS (primary), XTTS v2 (voice cloning)
 - **Arabic NLP**: Mishkal for diacritization (tachkil)
 - **Job Queue**: ARQ + Redis for async TTS processing
 - **Audio**: FFmpeg + Pydub for audio processing
+- **GPU**: PyTorch for GPU acceleration
 - **Server**: Uvicorn ASGI server
 
 ### Frontend
 - **Framework**: React 18 with TypeScript
 - **Build Tool**: Vite with HMR
-- **Styling**: TailwindCSS with dark mode support
+- **Styling**: TailwindCSS v4 with dark mode support
 - **Data Fetching**: TanStack Query (React Query) with caching
 - **HTTP Client**: Axios
-- **Routing**: React Router DOM
-- **Audio**: Wavesurfer.js for waveform editing
+- **Routing**: React Router DOM v7
+- **Audio**: Wavesurfer.js for waveform visualization
+- **Drag & Drop**: @dnd-kit for drag-and-drop reordering
+- **Icons**: Lucide React
 
 ### Desktop
 - **Framework**: Tauri v2 (Rust-based)
 - **Architecture**: Python sidecar (backend) + WebView (frontend)
 - **Auto-start**: Backend auto-launches with Tauri app
-- **Cross-platform**: Windows, macOS, Linux support
+- **Native Dialogs**: @tauri-apps/plugin-dialog for file dialogs
+- **Cross-platform**: Windows, macOS, Linux support with installers
 
 ## Project Structure
 
@@ -55,42 +80,61 @@ audiobook-maker/
 ├── backend/
 │   ├── main.py                 # FastAPI application entry point
 │   ├── models/
-│   │   └── database.py         # SQLAlchemy models and database setup
+│   │   ├── database.py          # SQLAlchemy models and database setup
+│   │   └── schemas.py          # Pydantic request/response schemas
 │   ├── routers/
-│   │   ├── arabic.py           # Arabic text processing endpoints
-│   │   ├── chapters.py         # Chapter management API
-│   │   ├── export.py           # Audio export functionality
-│   │   ├── pdf.py              # PDF extraction and OCR
-│   │   ├── projects.py         # Project management API
-│   │   └── tts.py              # Text-to-speech endpoints
+│   │   ├── arabic.py            # Arabic text processing endpoints
+│   │   ├── chapters.py          # Chapter management API
+│   │   ├── documents.py         # Unified document extraction API
+│   │   ├── export.py            # Audio export and background music
+│   │   ├── jobs.py              # Job queue and notifications
+│   │   ├── pdf.py               # PDF extraction and OCR
+│   │   ├── projects.py          # Project management API
+│   │   └── tts.py               # Text-to-speech and voice cloning
 │   ├── services/
-│   │   └── tts_generator.py    # TTS generation service
-│   └── requirements.txt        # Python dependencies
+│   │   ├── arabic_text_service.py # Arabic text processing
+│   │   ├── background_music_service.py # Background music mixing
+│   │   ├── chapter_split_service.py   # Chapter auto-split
+│   │   ├── notification_service.py     # Email notifications
+│   │   ├── ocr_service.py       # OCR processing
+│   │   ├── tts_service.py       # TTS generation
+│   │   └── voice_clone_service.py     # Voice cloning
+│   ├── requirements.txt         # Python dependencies
+│   └── start.sh                 # Backend startup script
 │
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── AudioPlayer.tsx # Audio playback component
-│   │   │   ├── PdfUpload.tsx   # PDF upload with progress
-│   │   │   └── TTSControls.tsx # TTS configuration UI
+│   │   │   ├── AudioPlayer.tsx  # Audio playback component
+│   │   │   ├── ExportModal.tsx # Export format/quality modal
+│   │   │   ├── PdfUpload.tsx    # PDF upload with drag-and-drop
+│   │   │   └── TTSControls.tsx   # TTS configuration UI
+│   │   ├── contexts/
+│   │   │   └── DarkModeContext.tsx # Dark mode state
 │   │   ├── lib/
-│   │   │   └── api.ts          # API client with all endpoints
+│   │   │   └── api.ts           # API client with all endpoints
 │   │   ├── pages/
-│   │   │   ├── Home.tsx        # Project listing page
-│   │   │   └── ProjectDetail.tsx # Chapter management page
-│   │   ├── types/
-│   │   │   └── audiobook.ts    # TypeScript type definitions
-│   │   ├── App.tsx             # Main app with routing
-│   │   └── main.tsx            # React entry point
-│   ├── index.html
+│   │   │   ├── Home.tsx          # Project listing page
+│   │   │   ├── ProjectDetail.tsx # Chapter management page
+│   │   │   └── Settings.tsx      # Settings page
+│   │   ├── App.tsx              # Main app with routing
+│   │   └── main.tsx             # React entry point
+│   ├── src-tauri/
+│   │   ├── src/
+│   │   │   ├── lib.rs           # Tauri commands and sidecar
+│   │   │   └── main.rs          # Tauri app entry point
+│   │   ├── capabilities/
+│   │   │   └── default.json     # Tauri permissions
+│   │   └── tauri.conf.json      # Tauri configuration
 │   ├── package.json
 │   ├── tailwind.config.js
 │   ├── tsconfig.json
-│   └── vite.config.ts          # Vite config with API proxy
+│   └── vite.config.ts           # Vite config with API proxy
 │
-├── PLAN.md                     # Architecture planning document
-├── CHECKLIST.md                # Implementation checklist
-└── README.md                   # This file
+├── docker-compose.yml           # PostgreSQL and Redis containers
+├── CHECKLIST.md                 # Implementation checklist
+├── PROJECT_STATUS.md            # Project status and progress
+└── README.md                    # This file
 ```
 
 ## Quick Start (Recommended)
@@ -98,12 +142,28 @@ audiobook-maker/
 The easiest way to get started:
 
 ```bash
-# Clone/navigate to project
-cd /Users/tahar/CascadeProjects/audiobook-maker
+# Clone the repository
+git clone https://github.com/TahGue/audiobook.git
+cd audiobook
 
-# Start everything (backend + frontend)
-./start.sh web
+# Start PostgreSQL and Redis (optional, for production)
+docker compose up -d
+
+# Start backend
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+alembic upgrade head
+uvicorn main:app --reload --port 8001
+
+# In another terminal, start frontend
+cd frontend
+npm install
+npm run dev
 ```
+
+The web app will be available at `http://localhost:5173`
 
 ## Installation & Setup
 
@@ -230,16 +290,19 @@ npm run tauri:build
 - `POST /api/projects/` - Create new project
 - `GET /api/projects/{id}` - Get project details
 - `DELETE /api/projects/{id}` - Delete project
+- `PATCH /api/projects/{id}` - Update project
 
 ### Chapters API
 - `GET /api/chapters/?project_id={id}` - List chapters in project
 - `POST /api/chapters/` - Create new chapter
 - `PUT /api/chapters/{id}` - Update chapter
 - `DELETE /api/chapters/{id}` - Delete chapter
+- `PATCH /api/chapters/{id}/reorder/` - Reorder chapter
+- `POST /api/chapters/auto-split` - Auto-split text into chapters
 
-### PDF API
-- `POST /api/pdf/extract/` - Extract text from PDF
-- `POST /api/pdf/ocr/` - OCR for scanned PDFs (supports Arabic)
+### Documents API
+- `POST /api/documents/extract/` - Extract text from PDF/EPUB/DOCX
+- `POST /api/documents/ocr/` - OCR for scanned documents
 
 ### Arabic Processing API
 - `POST /api/arabic/process/` - Process Arabic text
@@ -247,10 +310,28 @@ npm run tauri:build
 
 ### TTS API
 - `POST /api/tts/generate/` - Generate audio from text
-- `POST /api/tts/preview/` - Preview voice
+- `GET /api/tts/languages/` - Get supported languages
+- `GET /api/tts/voices/` - Get available voices
+- `POST /api/tts/voice-profiles` - Create voice profile
+- `GET /api/tts/voice-profiles` - List voice profiles
+- `DELETE /api/tts/voice-profiles/{id}` - Delete voice profile
+- `GET /api/tts/voice-clone/available` - Check voice cloning availability
 
 ### Export API
-- `POST /api/export/{project_id}/` - Export project to audio file
+- `POST /api/export/{project_id}` - Export project to audio file
+- `POST /api/export/background-music/upload` - Upload background music
+- `GET /api/export/background-music/tracks` - List background music
+- `POST /api/export/background-music/mix` - Mix background music with voice
+- `POST /api/export/background-music/preview` - Preview mixed audio
+
+### Jobs API
+- `POST /api/jobs/tts/enqueue` - Enqueue TTS job
+- `GET /api/jobs/tts/{job_id}/status` - Get job status
+- `POST /api/jobs/tts/{job_id}/cancel` - Cancel job
+- `GET /api/jobs/queue/stats` - Get queue statistics
+- `GET /api/jobs/notification/status` - Get notification status
+- `POST /api/jobs/notification/config` - Update notification config
+- `POST /api/jobs/notification/test` - Test notification
 
 Full API documentation available at `http://localhost:8001/docs` when backend is running.
 
@@ -267,11 +348,25 @@ DATABASE_URL=postgresql://user:password@localhost:5434/audiobook
 # Audio storage
 AUDIO_DIR=./audio
 
-# TTS Models directory
-PIPER_MODELS_DIR=./models
+# OCR/TTS Models directory
+MODELS_DIR=./models
 
 # CORS origins (for development)
 CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+
+# GPU acceleration
+USE_GPU=true
+
+# Voice cloning
+TTS_MODELS_DIR=./tts_models
+
+# Notifications (optional)
+NOTIFICATION_EMAIL_ENABLED=false
+NOTIFICATION_EMAIL_ADDRESS=your@email.com
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your@email.com
+SMTP_PASSWORD=your_password
 ```
 
 ### Vite Proxy Configuration
@@ -357,17 +452,32 @@ Ensure PostgreSQL is running and the `DATABASE_URL` in `.env` is correct.
 - `psycopg2-binary` - PostgreSQL driver
 - `pdfplumber` - PDF text extraction
 - `pymupdf` - PDF rendering for OCR
-- `easyocr` - Optical character recognition
+- `ebooklib` - EPUB parsing
+- `python-docx` - DOCX parsing
+- `surya-ocr` - Primary OCR engine
+- `easyocr` - Fallback OCR with GPU support
 - `mishkal` - Arabic diacritization
-- `piper-tts` - Text-to-speech engine
+- `edge-tts` - Text-to-speech engine
+- `TTS` - XTTS v2 voice cloning
+- `torch` - PyTorch for GPU acceleration
+- `arq` - Job queue for async processing
+- `redis` - Redis for job queue
+- `ffmpeg-python` - Audio processing
+- `pydub` - Audio manipulation
 - `uvicorn` - ASGI server
 
 ### Key Frontend Dependencies
 - `react` - UI framework
 - `react-router-dom` - Routing
 - `axios` - HTTP client
+- `@tanstack/react-query` - Data fetching and caching
 - `lucide-react` - Icons
 - `tailwindcss` - Styling
+- `@dnd-kit/core` - Drag and drop
+- `@dnd-kit/sortable` - Sortable drag and drop
+- `@tauri-apps/api` - Tauri API
+- `@tauri-apps/plugin-dialog` - Native dialogs
+- `wavesurfer.js` - Audio waveform visualization
 - `vite` - Build tool
 - `typescript` - Type safety
 
@@ -383,9 +493,10 @@ Ensure PostgreSQL is running and the `DATABASE_URL` in `.env` is correct.
 7. Frontend plays audio via `<audio>` element
 
 ### Database Schema
-- **projects**: id, name, description, language, created_at, updated_at
-- **chapters**: id, project_id, title, content, audio_url, order, created_at, updated_at
-- **tts_cache**: id, text_hash, audio_path, voice_id, created_at
+- **projects**: id, title, description, language, voice_profile_id, created_at, updated_at
+- **chapters**: id, project_id, title, content, language, voice_id, order_index, audio_path, duration_seconds, created_at, updated_at
+- **tts_cache**: id, text_hash, voice_id, audio_path, created_at
+- **ocr_cache**: id, file_hash, language, extracted_text, created_at
 
 ## Contributing
 
@@ -401,10 +512,15 @@ MIT License - See LICENSE file for details
 
 ## Acknowledgments
 
-- [Piper TTS](https://github.com/rhasspy/piper) - Fast, local neural text-to-speech
+- [Edge TTS](https://github.com/rany2/edge-tts) - Microsoft Edge neural text-to-speech
+- [XTTS v2](https://github.com/coqui-ai/TTS) - Voice cloning and TTS
 - [Mishkal](https://github.com/linuxscout/mishkal) - Arabic text diacritization
+- [Surya-OCR](https://github.com/VikParuchuri/surya) - Multilingual OCR
 - [EasyOCR](https://github.com/JaidedAI/EasyOCR) - Multilingual OCR
 - [pdfplumber](https://github.com/jsvine/pdfplumber) - PDF text extraction
+- [Tauri](https://tauri.app/) - Desktop application framework
+- [@dnd-kit](https://dndkit.com/) - Drag and drop library
+- [React Query](https://tanstack.com/query) - Data fetching and caching
 
 ## Support
 
