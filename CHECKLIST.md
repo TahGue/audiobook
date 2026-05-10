@@ -152,7 +152,7 @@
 - [x] Chapter auto-split (intelligent text segmentation)
 - [x] Progress bar per chapter
 - [x] Cancel batch job
-- [ ] Email/notification on completion (optional)
+- [x] Email/notification on completion
 
 ### Chapter Auto-Split
 - [x] Detect headings (regex + ML)
@@ -208,7 +208,7 @@ npx tauri build
 
 | Phase | Status | Completion |
 |---|---|---|
-| Phase 1 — FastAPI Backend | ✅ Complete | 95% |
+| Phase 1 — FastAPI Backend | ✅ Complete | 100% |
 | Phase 2 — React + Vite Frontend | ✅ Complete | 100% |
 | Phase 3 — Tauri Desktop | ✅ Complete | 95% |
-| Phase 4 — Advanced Features | ✅ Complete | 80% |
+| Phase 4 — Advanced Features | ✅ Complete | 100% |

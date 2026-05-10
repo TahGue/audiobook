@@ -1,4 +1,4 @@
-"""Job queue router for async TTS processing with ARQ."""
+"""Jobs router for ARQ job queue management."""
 
 import uuid
 import asyncio
@@ -20,6 +20,7 @@ except ImportError:
 
 from models.database import get_db, Chapter
 from sqlmodel import Session
+from services.notification_service import notification_service
 
 router = APIRouter()
 
@@ -314,3 +315,56 @@ async def get_queue_stats():
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get queue stats: {str(e)}")
+
+
+class NotificationConfig(BaseModel):
+    email_enabled: bool = False
+    email_address: Optional[str] = None
+    smtp_server: Optional[str] = None
+    smtp_port: Optional[int] = None
+    smtp_username: Optional[str] = None
+    smtp_password: Optional[str] = None
+
+
+@router.get("/notification/status")
+def get_notification_status():
+    """Get notification service status."""
+    return {
+        "enabled": notification_service.is_enabled(),
+        "email_address": notification_service.config.email_address
+    }
+
+
+@router.post("/notification/config")
+def update_notification_config(config: NotificationConfig):
+    """Update notification configuration."""
+    try:
+        notification_service.config.email_enabled = config.email_enabled
+        notification_service.config.email_address = config.email_address
+        if config.smtp_server:
+            notification_service.config.smtp_server = config.smtp_server
+        if config.smtp_port:
+            notification_service.config.smtp_port = config.smtp_port
+        if config.smtp_username:
+            notification_service.config.smtp_username = config.smtp_username
+        if config.smtp_password:
+            notification_service.config.smtp_password = config.smtp_password
+        
+        return {"message": "Notification configuration updated"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/notification/test")
+def test_notification():
+    """Send a test notification."""
+    try:
+        success = notification_service.send_batch_completion_notification(
+            project_title="Test Project",
+            chapters_completed=5,
+            total_chapters=5,
+            success=True
+        )
+        return {"message": "Test notification sent", "success": success}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
