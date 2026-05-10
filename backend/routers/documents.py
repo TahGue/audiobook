@@ -113,11 +113,13 @@ async def extract_document(
     
     Returns extracted text with metadata.
     """
+    print(f"[DEBUG] File upload: filename={file.filename}, content_type={file.content_type}")
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
     
     # Read file content
     content = await file.read()
+    print(f"[DEBUG] File size: {len(content)} bytes")
     if not content:
         raise HTTPException(status_code=400, detail="Empty file")
     
