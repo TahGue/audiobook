@@ -27,7 +27,7 @@ const containsArabic = (text: string): boolean => {
 // Light cleanup for extracted text
 const cleanupExtractedText = (text: string): string => {
   // Remove excessive whitespace
-  return text.replace(/\n{4,}/g, '\n\n\n').trim()
+  return text.normalize('NFKC').replace(/\n{4,}/g, '\n\n\n').trim()
 }
 
 export default function PdfUpload({ onTextExtracted, disabled }: PdfUploadProps) {

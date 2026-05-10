@@ -168,7 +168,7 @@ class ArabicTextService:
             # already logical Arabic should not be reversed
             # detect common prefixes
             common_prefixes = (
-                "ال", "و", "ف", "ب", "ل", "ك"
+                "ال", "ا", "أ", "إ", "آ", "و", "ف", "ب", "ل", "ك"
             )
             for p in common_prefixes:
                 if run.startswith(p):

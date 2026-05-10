@@ -1,7 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from pydantic import BaseModel
 from typing import List
-import io
 
 router = APIRouter()
 
@@ -26,18 +25,29 @@ async def extract_pdf_text(file: UploadFile = File(...)):
     content = await file.read()
 
     try:
-        import pdfplumber
+        import fitz
+        from services.arabic_text_service import arabic_service
+
         pages = []
-        full_text = ""
+        text_parts = []
+        doc = fitz.open(stream=content, filetype="pdf")
 
-        with pdfplumber.open(io.BytesIO(content)) as pdf:
-            total_pages = len(pdf.pages)
-            for i, page in enumerate(pdf.pages, 1):
-                text = page.extract_text(x_tolerance=2, y_tolerance=2) or ""
-                pages.append(PageText(page=i, text=text))
-                full_text += text + "\n\n"
+        try:
+            total_pages = len(doc)
+            for i in range(total_pages):
+                page = doc[i]
+                raw_text = page.get_text(
+                    "text",
+                    flags=fitz.TEXT_PRESERVE_LIGATURES | fitz.TEXT_PRESERVE_WHITESPACE
+                )
+                processed = arabic_service.clean_arabic_text(raw_text).text if raw_text.strip() else ""
+                pages.append(PageText(page=i + 1, text=processed))
+                if processed:
+                    text_parts.append(processed)
+        finally:
+            doc.close()
 
-        full_text = full_text.strip()
+        full_text = "\n\n".join(text_parts).strip()
         return PDFExtractResponse(
             pages=pages,
             total_pages=total_pages,
