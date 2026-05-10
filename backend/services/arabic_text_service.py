@@ -335,7 +335,6 @@ class ArabicTextService:
                 ocr_result = ocr_service.process_pdf(
                     content,
                     OCROptions(languages=["ar", "en"], engine=OCREngine.EASYOCR, dpi=250),
-                    max_pages=5,  # Limit to first 5 pages for speed
                 )
                 ocr_text = ocr_result.get("text", "").strip()
                 print(f"[DEBUG] OCR extracted {len(ocr_text)} characters from {ocr_result.get('total_pages', 0)} pages")

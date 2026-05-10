@@ -35,7 +35,7 @@ arabic-reshaper==3.0.0
 python-bidi==0.6.3
 
 # TTS
-piper-tts==1.2.0
+# piper-tts==1.2.0     # Commented out due to Python 3.13 incompatibility
 # kokoro-tts==1.0.0    # Additional TTS (Phase 2)
 
 # Fallback TTS (Microsoft neural voices)
@@ -45,11 +45,11 @@ edge-tts==6.1.12
 ffmpeg-python==0.2.0
 pydub==0.25.1
 numpy==2.2.0
-Pillow==11.0.0
+Pillow
 
 # Job queue (Production TTS processing)
 arq==0.26.0            # Async Redis queue for TTS jobs
-redis==5.0.1           # Redis client (use mini-redis for embedded)
+redis
 
 # Image processing for OCR
 opencv-python-headless>=4.8.0
