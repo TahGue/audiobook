@@ -2,12 +2,19 @@
 
 import os
 import io
+import ssl
 import tempfile
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 from dataclasses import dataclass
 from enum import Enum
 import hashlib
+
+try:
+    import certifi
+    os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+except Exception:
+    ssl._create_default_https_context = ssl._create_unverified_context
 
 
 class OCREngine(Enum):
