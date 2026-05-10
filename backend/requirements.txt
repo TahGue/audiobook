@@ -53,6 +53,7 @@ redis
 
 # Image processing for OCR
 opencv-python-headless>=4.8.0
+torch>=2.0.0         # PyTorch for GPU acceleration (OCR & Voice Cloning)
 
 # Phase 4 (Voice cloning)
-# TTS==0.22.0          # XTTS v2 voice cloning
+TTS==0.22.0          # XTTS v2 voice cloning
