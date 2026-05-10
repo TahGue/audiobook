@@ -296,7 +296,7 @@ class ArabicTextService:
         # Clean up and filter empty sentences
         return [s.strip() for s in sentences if s.strip()]
     
-    def extract_arabic_from_pdf(self, content: bytes, use_ocr_fallback: bool = True) -> ArabicProcessingResult:
+    def extract_arabic_from_pdf(self, content: bytes, use_ocr_fallback: bool = True, progress_callback=None) -> ArabicProcessingResult:
         """
         Extract and clean Arabic text from PDF.
         Uses PyMuPDF with proper flags for Arabic and applies full cleaning pipeline.
@@ -307,7 +307,20 @@ class ArabicTextService:
         doc = fitz.open(stream=content, filetype="pdf")
         
         try:
-            for page_num in range(len(doc)):
+            # Check if PDF is encrypted
+            if doc.is_encrypted:
+                print(f"[DEBUG] PDF is encrypted")
+                return ArabicProcessingResult(
+                    text="",
+                    was_corrupted=True,
+                    fixes_applied=["pdf_encrypted"],
+                    confidence_score=0.0
+                )
+            
+            total_pages = len(doc)
+            print(f"[DEBUG] PDF has {total_pages} pages")
+            
+            for page_num in range(total_pages):
                 page = doc[page_num]
                 # Extract with flags to preserve ligatures and whitespace for Arabic
                 # TEXT_PRESERVE_LIGATURES keeps Arabic letter connections
@@ -317,12 +330,24 @@ class ArabicTextService:
                     flags=fitz.TEXT_PRESERVE_LIGATURES | fitz.TEXT_PRESERVE_WHITESPACE
                 )
                 
+                print(f"[DEBUG] Page {page_num + 1}: extracted {len(page_text)} characters")
+                if len(page_text) < 200:
+                    print(f"[DEBUG] Page {page_num + 1} text preview: {repr(page_text[:100])}")
+                
                 if page_text.strip():
                     text_parts.append(page_text)
+                
+                # Report progress
+                if progress_callback:
+                    progress = ((page_num + 1) / total_pages) * 100
+                    progress_callback(progress)
         finally:
             doc.close()
         
         raw_text = "\n\n".join(text_parts)
+        print(f"[DEBUG] Total extracted text length: {len(raw_text)} characters")
+        if len(raw_text) < 500:
+            print(f"[DEBUG] Full extracted text: {repr(raw_text)}")
         
         # Apply Arabic cleaning pipeline
         result = self.clean_arabic_text(raw_text)
@@ -362,6 +387,6 @@ def process_arabic_text(text: str) -> ArabicProcessingResult:
     return arabic_service.clean_arabic_text(text)
 
 
-def extract_arabic_from_pdf(content: bytes) -> ArabicProcessingResult:
+def extract_arabic_from_pdf(content: bytes, use_ocr_fallback: bool = True, progress_callback=None) -> ArabicProcessingResult:
     """Convenience function for extracting Arabic from PDF."""
-    return arabic_service.extract_arabic_from_pdf(content)
+    return arabic_service.extract_arabic_from_pdf(content, use_ocr_fallback=use_ocr_fallback, progress_callback=progress_callback)

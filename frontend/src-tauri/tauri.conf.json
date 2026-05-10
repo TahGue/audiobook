@@ -24,7 +24,8 @@
     ],
     "security": {
       "csp": null
-    }
+    },
+    "withGlobalTauri": true
   },
   "bundle": {
     "active": true,
@@ -38,6 +39,32 @@
     ],
     "externalBin": [
       "binaries/audiobook-backend"
-    ]
+    ],
+    "macOS": {
+      "frameworks": [],
+      "minimumSystemVersion": "10.13",
+      "exceptionDomain": "",
+      "signingIdentity": null,
+      "entitlements": null,
+      "providerShortName": null
+    },
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
+    },
+    "linux": {
+      "deb": {
+        "depends": []
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    },
+    "publisher": "AudiobookMaker",
+    "copyright": "Copyright © 2026 AudiobookMaker",
+    "category": "Productivity",
+    "shortDescription": "Create audiobooks from PDF documents",
+    "longDescription": "Audiobook Maker is a powerful desktop application that converts PDF documents into professional audiobooks using text-to-speech technology. Supports multiple languages, voice cloning, and background music mixing."
   }
 }

@@ -40,6 +40,7 @@ class ProjectBase(BaseModel):
     title: str
     description: Optional[str] = None
     language: Optional[str] = "en"
+    voice_profile_id: Optional[str] = None
 
 
 class ProjectCreate(ProjectBase):
@@ -50,6 +51,7 @@ class ProjectUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     language: Optional[str] = None
+    voice_profile_id: Optional[str] = None
 
 
 class ProjectResponse(ProjectBase):

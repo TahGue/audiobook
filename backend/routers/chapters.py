@@ -3,10 +3,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select, func
 from typing import List, Optional
+from pydantic import BaseModel
 
 from models.database import get_db, Chapter, Project
 from models.schemas import ChapterCreate, ChapterUpdate, ChapterResponse
 from services.arabic_text_service import arabic_service
+from services.chapter_split_service import chapter_split_service
 
 router = APIRouter()
 
@@ -106,3 +108,54 @@ def reorder_chapter(chapter_id: str, order_index: int, db: Session = Depends(get
     db.add(chapter)
     db.commit()
     return {"success": True}
+
+
+class AutoSplitRequest(BaseModel):
+    text: str
+    project_id: str
+    language: str = "en"
+    target_length: int = 5000
+
+
+@router.post("/auto-split")
+def auto_split_chapters(data: AutoSplitRequest, db: Session = Depends(get_db)):
+    """
+    Automatically split text into chapters and create them in the project.
+    """
+    # Verify project exists
+    project = db.exec(select(Project).where(Project.id == data.project_id)).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Split text into chapters
+    chapter_split_service.target_chapter_length = data.target_length
+    splits = chapter_split_service.split_text(data.text, data.language)
+    
+    # Get current max order index
+    max_order = db.exec(
+        select(func.count(Chapter.id)).where(Chapter.project_id == data.project_id)
+    ).one() or 0
+    
+    # Create chapters from splits
+    created_chapters = []
+    for i, split in enumerate(splits):
+        chapter_data = ChapterCreate(
+            title=split.title,
+            content=split.content,
+            project_id=data.project_id,
+            language=data.language
+        )
+        chapter_data_dict = chapter_data.model_dump()
+        chapter_data_dict["content"] = arabic_service.clean_arabic_text(chapter_data_dict["content"]).text
+        chapter_data_dict["order_index"] = max_order + i
+        
+        chapter = Chapter(**chapter_data_dict)
+        db.add(chapter)
+        db.commit()
+        db.refresh(chapter)
+        created_chapters.append(chapter)
+    
+    return {
+        "chapters_created": len(created_chapters),
+        "chapters": created_chapters
+    }

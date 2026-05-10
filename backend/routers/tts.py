@@ -1,8 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session
+"""TTS router using ARQ and Edge TTS."""
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from sqlmodel import Session, select
+from typing import List
 from pydantic import BaseModel
+
 from models.database import get_db, Chapter
+from models.schemas import TTSGenerateRequest
+from services.tts_service import tts_service
+from services.voice_clone_service import voice_clone_service
 import os
 import uuid
 import asyncio
@@ -72,7 +78,76 @@ def get_languages():
 
 @router.get("/voices")
 def get_voices(language: str = "en"):
-    return VOICES.get(language, VOICES["en"])
+    """Get available voices for a language."""
+    voices = VOICES.get(language, [])
+    return {"voices": voices}
+
+
+@router.post("/voice-profiles")
+async def create_voice_profile(
+    name: str,
+    language: str = "en",
+    file: UploadFile = File(...)
+):
+    """Create a voice profile from an uploaded audio sample."""
+    try:
+        # Save uploaded file
+        file_extension = os.path.splitext(file.filename)[1]
+        sample_filename = f"{name}_{uuid.uuid4()}{file_extension}"
+        sample_path = os.path.join(voice_clone_service.voices_dir, sample_filename)
+        
+        with open(sample_path, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
+        
+        # Create voice profile
+        profile = voice_clone_service.create_voice_profile(sample_path, name, language)
+        
+        return {
+            "id": profile.id,
+            "name": profile.name,
+            "language": profile.language,
+            "message": "Voice profile created successfully"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/voice-profiles")
+def list_voice_profiles():
+    """List all available voice profiles."""
+    try:
+        profiles = voice_clone_service.list_voice_profiles()
+        return {
+            "profiles": [
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "language": p.language
+                }
+                for p in profiles
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/voice-profiles/{voice_id}")
+def delete_voice_profile(voice_id: str):
+    """Delete a voice profile."""
+    try:
+        success = voice_clone_service.delete_voice_profile(voice_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Voice profile not found")
+        return {"message": "Voice profile deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/voice-clone/available")
+def check_voice_clone_available():
+    """Check if voice cloning is available."""
+    return {"available": voice_clone_service.is_available()}
 
 
 @router.post("/generate")

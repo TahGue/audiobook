@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Upload, X, Check, Sparkles } from 'lucide-react'
 import { documentsApi, arabicApi } from '../lib/api'
+import { open } from '@tauri-apps/plugin-dialog'
 
 interface PdfUploadProps {
   onTextExtracted: (text: string) => void
@@ -40,6 +41,7 @@ export default function PdfUpload({ onTextExtracted, disabled }: PdfUploadProps)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<{ chars: number; text: string; diacritized?: boolean; file_type?: string } | null>(null)
   const [isProcessingArabic, setIsProcessingArabic] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
 
   const extractText = async (file: File) => {
     setIsLoading(true)
@@ -49,32 +51,24 @@ export default function PdfUpload({ onTextExtracted, disabled }: PdfUploadProps)
     setResult(null)
 
     try {
-      const response = await documentsApi.extract(file, (progress) => {
-        setUploadProgress(progress)
-      })
-
-      setStatus('extracting')
-      setUploadProgress(0)
-
-      // Simulate extraction progress
-      const extractionInterval = setInterval(() => {
-        setUploadProgress((prev) => {
-          if (prev >= 90) {
-            clearInterval(extractionInterval)
-            return 90
-          }
-          return prev + Math.random() * 10
-        })
-      }, 200)
+      const response = await documentsApi.extract(
+        file,
+        (uploadProgress) => {
+          setStatus('uploading')
+          setUploadProgress(uploadProgress)
+        },
+        (extractProgress) => {
+          setStatus('extracting')
+          setUploadProgress(extractProgress)
+        }
+      )
 
       if (!response.text.trim()) {
-        clearInterval(extractionInterval)
         setError('No text found in document.')
         setStatus(null)
         return
       }
 
-      clearInterval(extractionInterval)
       setUploadProgress(100)
       setStatus('done')
       
@@ -87,8 +81,8 @@ export default function PdfUpload({ onTextExtracted, disabled }: PdfUploadProps)
       
       setResult({ chars: response.total_chars, text: fixedText, file_type: response.file_type })
       onTextExtracted(fixedText)
-    } catch (err) {
-      setError('Failed to extract text from document')
+    } catch (err: any) {
+      setError(err.message || 'Failed to extract text from document')
       setStatus(null)
       console.error(err)
     } finally {
@@ -107,7 +101,68 @@ export default function PdfUpload({ onTextExtracted, disabled }: PdfUploadProps)
       return
     }
 
-    await extractText(file)
+    extractText(file)
+  }
+
+  const handleNativeFileSelect = async () => {
+    try {
+      const selected = await open({
+        multiple: false,
+        filters: [
+          {
+            name: 'Documents',
+            extensions: ['pdf', 'epub', 'docx']
+          }
+        ]
+      })
+
+      if (selected && typeof selected === 'string') {
+        // Convert the file path to a File object
+        const response = await fetch(`file://${selected}`)
+        const blob = await response.blob()
+        const fileName = selected.split('/').pop() || 'document'
+        const extension = '.' + fileName.split('.').pop()
+        
+        if (!SUPPORTED_EXTENSIONS.includes('.' + extension)) {
+          setError(`Unsupported file type: ${extension}. Please select PDF, EPUB, or DOCX.`)
+          return
+        }
+
+        const file = new File([blob], fileName, { type: blob.type })
+        extractText(file)
+      }
+    } catch (err) {
+      console.error('Failed to open file dialog:', err)
+      // Fallback to regular file input if Tauri dialog fails
+      document.getElementById('file-input')?.click()
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+  }
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+    
+    const file = e.dataTransfer.files[0]
+    if (!file) return
+
+    // Check file extension
+    const extension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'))
+    if (!SUPPORTED_EXTENSIONS.includes(extension)) {
+      setError(`Unsupported file type: ${extension}. Please select PDF, EPUB, or DOCX.`)
+      return
+    }
+
+    extractText(file)
   }
 
   const handleDiacritize = async () => {
@@ -154,17 +209,34 @@ export default function PdfUpload({ onTextExtracted, disabled }: PdfUploadProps)
             className="hidden"
             id="pdf-upload"
           />
-          <label
-            htmlFor="pdf-upload"
-            className={`inline-flex items-center gap-2 px-4 py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:border-indigo-500 dark:hover:border-indigo-400 transition-colors ${
-              disabled || isLoading ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
+          <div 
+            className={`flex gap-2 ${isDragging ? 'scale-105' : ''}`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
           >
-            <Upload className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              {status === 'uploading' ? 'Uploading...' : status === 'extracting' ? 'Extracting...' : 'Upload PDF'}
-            </span>
-          </label>
+            <label
+              htmlFor="pdf-upload"
+              className={`inline-flex items-center gap-2 px-4 py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:border-indigo-500 dark:hover:border-indigo-400 transition-colors ${
+                disabled || isLoading ? 'opacity-50 cursor-not-allowed' : ''
+              } ${isDragging ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : ''}`}
+            >
+              <Upload className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {isDragging ? 'Drop file here' : status === 'uploading' ? 'Uploading...' : status === 'extracting' ? 'Extracting...' : 'Upload PDF'}
+              </span>
+            </label>
+            <button
+              onClick={handleNativeFileSelect}
+              disabled={disabled || isLoading}
+              className={`inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors ${
+                disabled || isLoading ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+            >
+              <Upload className="w-5 h-5" />
+              <span className="text-sm font-medium">Open File</span>
+            </button>
+          </div>
         </>
       )}
 
@@ -172,15 +244,32 @@ export default function PdfUpload({ onTextExtracted, disabled }: PdfUploadProps)
         <div className="space-y-2">
           <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
             <div
-              className="bg-indigo-600 h-2.5 rounded-full transition-all duration-300 ease-out"
+              className={`h-2.5 rounded-full transition-all duration-300 ease-out ${
+                status === 'uploading'
+                  ? 'bg-blue-500'
+                  : status === 'extracting'
+                  ? 'bg-indigo-600'
+                  : 'bg-green-500'
+              }`}
               style={{ width: `${uploadProgress}%` }}
             />
           </div>
           <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
-            <span>
-              {status === 'uploading' ? 'Uploading PDF...' : 'Extracting text...'}
+            <span className="font-medium">
+              {status === 'uploading' ? (
+                <span className="flex items-center gap-1">
+                  <span className="animate-pulse">Uploading PDF...</span>
+                </span>
+              ) : status === 'extracting' ? (
+                <span className="flex items-center gap-1">
+                  <span className="animate-pulse">Extracting text...</span>
+                  <span className="text-gray-500">({Math.round(uploadProgress)}%)</span>
+                </span>
+              ) : (
+                'Processing...'
+              )}
             </span>
-            <span>{Math.round(uploadProgress)}%</span>
+            <span className="font-mono">{Math.round(uploadProgress)}%</span>
           </div>
         </div>
       )}

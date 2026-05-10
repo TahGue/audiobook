@@ -27,6 +27,8 @@ export const chaptersApi = {
   delete: (id: string) => api.delete(`/chapters/${id}/`),
   reorder: (id: string, orderIndex: number) =>
     api.patch(`/chapters/${id}/reorder/`, null, { params: { order_index: orderIndex } }),
+  autoSplit: (data: { text: string; project_id: string; language?: string; target_length?: number }) =>
+    api.post('/chapters/auto-split', data).then(r => r.data),
 }
 
 export const ttsApi = {
@@ -34,6 +36,16 @@ export const ttsApi = {
   getVoices: (language: string) => api.get<Voice[]>('/tts/voices/', { params: { language } }).then(r => r.data),
   generate: (data: { chapter_id: string; voice_id: string; language: string }) =>
     api.post('/tts/generate/', data).then(r => r.data),
+  createVoiceProfile: async (name: string, language: string, file: File) => {
+    const formData = new FormData()
+    formData.append('name', name)
+    formData.append('language', language)
+    formData.append('file', file)
+    return api.post('/tts/voice-profiles', formData).then(r => r.data)
+  },
+  listVoiceProfiles: () => api.get('/tts/voice-profiles').then(r => r.data),
+  deleteVoiceProfile: (voiceId: string) => api.delete(`/tts/voice-profiles/${voiceId}`),
+  checkVoiceCloneAvailable: () => api.get('/tts/voice-clone/available').then(r => r.data),
 }
 
 export const pdfApi = {
@@ -77,19 +89,57 @@ export interface DocumentExtractResponse {
 }
 
 export const documentsApi = {
-  extract: async (file: File, onProgress?: (progress: number) => void): Promise<DocumentExtractResponse> => {
+  extract: async (
+    file: File,
+    onUploadProgress?: (progress: number) => void,
+    onExtractProgress?: (progress: number) => void
+  ): Promise<DocumentExtractResponse> => {
     const formData = new FormData()
     formData.append('file', file)
-    const response = await api.post<DocumentExtractResponse>('/documents/extract/', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      onUploadProgress: (progressEvent) => {
-        if (progressEvent.total && onProgress) {
-          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
-          onProgress(percentCompleted)
+
+    // Use XMLHttpRequest for SSE streaming with upload progress
+
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      let buffer = ''
+
+      xhr.open('POST', '/api/documents/extract/')
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onUploadProgress) {
+          onUploadProgress(Math.round((e.loaded / e.total) * 100))
         }
-      },
+      }
+
+      xhr.onreadystatechange = () => {
+        if (xhr.readyState >= 3) {
+          const newData = xhr.responseText.substring(buffer.length)
+          buffer = xhr.responseText
+
+          const lines = newData.split('\n')
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6))
+                if (data.type === 'progress' && onExtractProgress) {
+                  onExtractProgress(data.progress)
+                } else if (data.type === 'complete') {
+                  resolve(data)
+                } else if (data.type === 'error') {
+                  reject(new Error(data.detail))
+                }
+              } catch (e) {
+                // Ignore parse errors for incomplete chunks
+              }
+            }
+          }
+        }
+      }
+
+      xhr.onerror = () => reject(new Error('Network error'))
+      xhr.onabort = () => reject(new Error('Request aborted'))
+
+      xhr.send(formData)
     })
-    return response.data
   },
   getSupportedFormats: () => api.get('/documents/supported-formats/').then(r => r.data),
 }

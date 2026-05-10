@@ -142,7 +142,7 @@ class OCRService:
         if self._easyocr_reader is None:
             self._easyocr_reader = easyocr.Reader(
                 options.languages,
-                gpu=False,
+                gpu=True,
                 download_enabled=True
             )
         

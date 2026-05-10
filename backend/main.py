@@ -1,9 +1,14 @@
+import os
+from dotenv import load_dotenv
+
+# Load environment variables before any other imports
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from models.database import create_tables
 from routers import projects, chapters, tts, pdf, export, arabic, documents, jobs
-import os
 
 app = FastAPI(title="Audiobook Maker API", version="1.0.0")
 

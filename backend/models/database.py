@@ -6,12 +6,20 @@ from sqlmodel import SQLModel, Field, Relationship, create_engine, Session, sele
 from sqlalchemy import event
 import os
 import uuid
+from dotenv import load_dotenv
+
+# Load environment variables before anything else
+load_dotenv()
 
 # SQLite database path - stored in user's data directory for desktop app
 DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "audiobook.db")
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DEFAULT_DB_PATH}")
+
+def get_database_url():
+    """Get database URL from environment variable or default to SQLite."""
+    return os.getenv("DATABASE_URL", f"sqlite:///{DEFAULT_DB_PATH}")
 
 # Create engine with SQLite optimizations for local usage
+DATABASE_URL = get_database_url()
 engine = create_engine(
     DATABASE_URL,
     echo=False,
@@ -44,6 +52,7 @@ class Project(SQLModel, table=True):
     title: str = Field(..., description="Project title")
     description: Optional[str] = Field(default=None, description="Project description")
     language: str = Field(default="en", description="Primary language code (e.g., 'en', 'ar')")
+    voice_profile_id: Optional[str] = Field(default=None, description="Custom voice profile ID for TTS")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

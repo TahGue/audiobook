@@ -43,14 +43,6 @@ source .venv/bin/activate
 echo -e "${BLUE}Installing dependencies...${NC}"
 pip install -q -r requirements.txt
 
-# Create directories
-echo -e "${BLUE}Creating directories...${NC}"
-mkdir -p audio cache models
-
-# Run database migrations
-echo -e "${BLUE}Running database migrations...${NC}"
-alembic upgrade head
-
 # Load environment variables if .env exists
 if [ -f ".env" ]; then
     echo -e "${BLUE}Loading environment from .env${NC}"
@@ -58,6 +50,14 @@ if [ -f ".env" ]; then
     source .env
     set +a
 fi
+
+# Create directories
+echo -e "${BLUE}Creating directories...${NC}"
+mkdir -p audio cache models
+
+# Run database migrations
+echo -e "${BLUE}Running database migrations...${NC}"
+alembic upgrade head
 
 case $MODE in
     dev)

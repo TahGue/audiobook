@@ -1,5 +1,5 @@
 use tauri::api::process::{Command, CommandEvent};
-use tauri::{Manager, Runtime};
+use tauri::{Manager, Runtime, AppHandle};
 use std::sync::Mutex;
 
 // Global state to hold the backend process handle
@@ -50,12 +50,43 @@ fn start_backend_sidecar<R: Runtime>(app: &tauri::AppHandle<R>) -> Result<(), St
   Ok(())
 }
 
+/// Toggle window visibility (for tray icon)
+#[tauri::command]
+fn toggle_window<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
+  if let Some(window) = app.get_webview_window("main") {
+    if window.is_visible().map_err(|e| e.to_string())? {
+      window.hide().map_err(|e| e.to_string())?;
+    } else {
+      window.show().map_err(|e| e.to_string())?;
+      window.set_focus().map_err(|e| e.to_string())?;
+    }
+  }
+  Ok(())
+}
+
+/// Show the main window
+#[tauri::command]
+fn show_window<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
+  if let Some(window) = app.get_webview_window("main") {
+    window.show().map_err(|e| e.to_string())?;
+    window.set_focus().map_err(|e| e.to_string())?;
+  }
+  Ok(())
+}
+
+/// Quit the application
+#[tauri::command]
+fn quit_app<R: Runtime>(app: AppHandle<R>) {
+  app.exit(0);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
     .manage(BackendState {
       process: Mutex::new(None),
     })
+    .invoke_handler(tauri::generate_handler![toggle_window, show_window, quit_app])
     .setup(|app| {
       // Try to start the backend sidecar (only in production builds)
       if !cfg!(debug_assertions) {

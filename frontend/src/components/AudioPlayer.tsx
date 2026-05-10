@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Play, Pause } from 'lucide-react'
 
 interface AudioPlayerProps {
@@ -21,11 +21,25 @@ export default function AudioPlayer({ audioUrl, duration }: AudioPlayerProps) {
     }
   }
 
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Space bar to toggle play/pause
+      if (e.code === 'Space' && !e.repeat) {
+        e.preventDefault()
+        togglePlay()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyPress)
+    return () => window.removeEventListener('keydown', handleKeyPress)
+  }, [isPlaying, audioUrl])
+
   return (
     <div className="flex items-center gap-4">
       <button
         onClick={togglePlay}
         className="p-2 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition-colors"
+        title="Space to play/pause"
       >
         {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
       </button>
