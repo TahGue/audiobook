@@ -29,7 +29,6 @@ const cleanupExtractedText = (text: string): string => {
   // Remove excessive whitespace
   return text
     .normalize('NFKC')
-    .replace(/املجلدا?أ?لول/g, 'المجلد الأول')
     .replace(/\n{4,}/g, '\n\n\n')
     .trim()
 }

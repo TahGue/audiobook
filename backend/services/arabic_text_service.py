@@ -157,17 +157,26 @@ class ArabicTextService:
         
         return text
 
-    def fix_lost_arabic_word_boundaries(self, text: str) -> str:
-        """Repair high-confidence Arabic word boundaries lost by PDF glyph extraction."""
-        replacements = {
-            "املجلداألول": "المجلد الأول",
-            "املجلدالأول": "المجلد الأول",
-            "المجلداالأول": "المجلد الأول",
-            "المجلدالأول": "المجلد الأول",
-        }
-        for bad, good in replacements.items():
-            text = text.replace(bad, good)
-        return text
+    def should_use_ocr(self, raw_text: str, cleaned_text: str) -> bool:
+        if not raw_text.strip() or not self.contains_arabic(raw_text):
+            return False
+
+        arabic_chars = self.count_arabic_chars(raw_text)
+        presentation_chars = len(self.presentation_forms.findall(raw_text))
+        presentation_ratio = presentation_chars / max(arabic_chars, 1)
+
+        normalized = self.normalize_unicode(raw_text)
+        arabic_runs = self._base_arabic_run.findall(normalized)
+        long_unspaced_runs = [run for run in arabic_runs if len(run) >= 18]
+
+        words = re.findall(r'[\u0600-\u06FF]+', cleaned_text)
+        avg_word_len = sum(len(word) for word in words) / max(len(words), 1)
+
+        return (
+            presentation_ratio >= 0.35
+            or len(long_unspaced_runs) >= 3
+            or avg_word_len >= 14
+        )
     
     def fix_visual_order(self, text: str) -> str:
         """
@@ -226,7 +235,7 @@ class ArabicTextService:
           2. Remove tatweel
           3. Fix duplicates
           4. Fix disconnected letters
-          5. Conditionally reverse visual runs
+          5. OCR fallback for unrecoverable PDF glyph streams
         
         NOTE: No reshape step - browsers handle Arabic shaping automatically.
         arabic_reshaper is only needed for PIL/OpenCV/image rendering.
@@ -267,18 +276,6 @@ class ArabicTextService:
             text = connected
             fixes.append("connected_letters")
             confidence = min(confidence + 0.2, 1.0)
-
-        # Step 5: Conditionally reverse visual runs
-        # Only reverse runs that contain presentation forms or appear visually reversed
-        fixed_order = self.fix_visual_order(text)
-        if fixed_order != text:
-            text = fixed_order
-            fixes.append("fixed_visual_order")
-
-        segmented = self.fix_lost_arabic_word_boundaries(text)
-        if segmented != text:
-            text = segmented
-            fixes.append("fixed_lost_word_boundaries")
 
         return ArabicProcessingResult(
             text=text,
@@ -330,10 +327,25 @@ class ArabicTextService:
         # Apply Arabic cleaning pipeline
         result = self.clean_arabic_text(raw_text)
         
-        # If confidence is very low and OCR fallback enabled, use OCR
-        if result.confidence_score < 0.3 and use_ocr_fallback:
-            # TODO: Implement OCR fallback with PaddleOCR or Tesseract
-            pass
+        if use_ocr_fallback and self.should_use_ocr(raw_text, result.text):
+            try:
+                from services.ocr_service import OCROptions, OCREngine, ocr_service
+
+                ocr_result = ocr_service.process_pdf(
+                    content,
+                    OCROptions(languages=["ar", "en"], engine=OCREngine.EASYOCR, dpi=250),
+                )
+                ocr_text = ocr_result.get("text", "").strip()
+                if ocr_text:
+                    cleaned_ocr = self.clean_arabic_text(ocr_text)
+                    cleaned_ocr.fixes_applied.append("ocr_fallback")
+                    cleaned_ocr.confidence_score = max(
+                        cleaned_ocr.confidence_score,
+                        float(ocr_result.get("average_confidence") or 0),
+                    )
+                    return cleaned_ocr
+            except Exception:
+                result.fixes_applied.append("ocr_fallback_failed")
         
         return result
 

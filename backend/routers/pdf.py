@@ -26,28 +26,13 @@ async def extract_pdf_text(file: UploadFile = File(...)):
 
     try:
         import fitz
-        from services.arabic_text_service import arabic_service
+        from services.arabic_text_service import extract_arabic_from_pdf
 
-        pages = []
-        text_parts = []
-        doc = fitz.open(stream=content, filetype="pdf")
-
-        try:
+        result = extract_arabic_from_pdf(content)
+        full_text = result.text.strip()
+        with fitz.open(stream=content, filetype="pdf") as doc:
             total_pages = len(doc)
-            for i in range(total_pages):
-                page = doc[i]
-                raw_text = page.get_text(
-                    "text",
-                    flags=fitz.TEXT_PRESERVE_LIGATURES | fitz.TEXT_PRESERVE_WHITESPACE
-                )
-                processed = arabic_service.clean_arabic_text(raw_text).text if raw_text.strip() else ""
-                pages.append(PageText(page=i + 1, text=processed))
-                if processed:
-                    text_parts.append(processed)
-        finally:
-            doc.close()
-
-        full_text = "\n\n".join(text_parts).strip()
+        pages = [PageText(page=1, text=full_text)] if full_text else []
         return PDFExtractResponse(
             pages=pages,
             total_pages=total_pages,
