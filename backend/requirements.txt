@@ -1,0 +1,56 @@
+# Web framework
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+python-multipart==0.0.9
+
+# Database - SQLModel (SQLite by default, PostgreSQL optional)
+sqlmodel==0.0.22
+sqlalchemy==2.0.36
+alembic==1.13.3
+# psycopg2-binary==2.9.9  # Uncomment for PostgreSQL support
+
+# Validation
+pydantic==2.9.2
+pydantic-settings==2.5.2
+python-dotenv==1.0.1
+
+# PDF extraction
+pdfplumber==0.11.4
+pymupdf==1.25.2
+
+# Document parsing
+ebooklib==0.18         # EPUB support
+python-docx==1.1.2     # DOCX support
+beautifulsoup4==4.12.3 # HTML parsing for EPUB
+lxml==5.3.0            # XML/HTML parser
+
+# OCR - Choose one or both
+surya-ocr==0.6.0       # Primary - fast, accurate, good Arabic (recommended)
+easyocr==1.7.2         # Fallback - supports 80+ languages
+
+# Arabic text processing
+mishkal==0.4.1
+pyarabic==0.6.15
+
+# TTS
+piper-tts==1.2.0
+# kokoro-tts==1.0.0    # Additional TTS (Phase 2)
+
+# Fallback TTS (Microsoft neural voices)
+edge-tts==6.1.12
+
+# Audio processing
+ffmpeg-python==0.2.0
+pydub==0.25.1
+numpy==2.2.0
+Pillow==11.0.0
+
+# Job queue (Production TTS processing)
+arq==0.26.0            # Async Redis queue for TTS jobs
+redis==5.0.1           # Redis client (use mini-redis for embedded)
+
+# Image processing for OCR
+opencv-python-headless>=4.8.0
+
+# Phase 4 (Voice cloning)
+# TTS==0.22.0          # XTTS v2 voice cloning

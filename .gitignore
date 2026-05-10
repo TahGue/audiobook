@@ -1,0 +1,22 @@
+# Python
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.pyc
+backend/.env
+
+# Audio files (can be large)
+audio/
+
+# Piper models (large binary files)
+backend/piper_models/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Tauri
+src-tauri/target/
+
+# OS
+.DS_Store
