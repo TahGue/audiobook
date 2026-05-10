@@ -326,7 +326,7 @@ class ArabicTextService:
     def extract_arabic_from_pdf(self, content: bytes, use_ocr_fallback: bool = True) -> ArabicProcessingResult:
         """
         Extract and clean Arabic text from PDF.
-        Uses PyMuPDF and applies full cleaning pipeline.
+        Uses PyMuPDF with proper flags for Arabic and applies full cleaning pipeline.
         """
         import fitz
         
@@ -336,8 +336,13 @@ class ArabicTextService:
         try:
             for page_num in range(len(doc)):
                 page = doc[page_num]
-                # Try embedded text first
-                page_text = page.get_text("text")
+                # Extract with flags to preserve ligatures and whitespace for Arabic
+                # TEXT_PRESERVE_LIGATURES keeps Arabic letter connections
+                # TEXT_PRESERVE_WHITESPACE maintains spacing structure
+                page_text = page.get_text(
+                    "text", 
+                    flags=fitz.TEXT_PRESERVE_LIGATURES | fitz.TEXT_PRESERVE_WHITESPACE
+                )
                 
                 if page_text.strip():
                     text_parts.append(page_text)
