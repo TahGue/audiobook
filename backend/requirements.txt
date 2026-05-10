@@ -31,6 +31,8 @@ easyocr==1.7.2         # Fallback - supports 80+ languages
 # Arabic text processing
 mishkal==0.4.1
 pyarabic==0.6.15
+arabic-reshaper==3.0.0
+python-bidi==0.6.3
 
 # TTS
 piper-tts==1.2.0

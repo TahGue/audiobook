@@ -23,54 +23,12 @@ def get_file_hash(content: bytes) -> str:
     return hashlib.md5(content).hexdigest()
 
 
-def clean_arabic_text(text: str) -> str:
-    """Clean and fix common issues with Arabic text extraction."""
-    import re
-    
-    # Remove duplicate consecutive characters (common PDF extraction issue)
-    # Replace 3+ same characters with 1
-    text = re.sub(r'(.)\1{2,}', r'\1', text)
-    
-    # Fix common ligature issues
-    # Replace presentation forms with standard Arabic
-    text = text.replace('\ufb50', '\u0627')  # alef with hamza
-    text = text.replace('\ufb51', '\u0627')  # alef with hamza
-    text = text.replace('\ufb52', '\u0628')  # beh
-    text = text.replace('\ufb56', '\u062a')  # teh
-    text = text.replace('\ufb5a', '\u062b')  # theh
-    text = text.replace('\ufb5e', '\u062c')  # jeem
-    text = text.replace('\ufb62', '\u062d')  # hah
-    text = text.replace('\ufb66', '\u062e')  # khah
-    
-    # Remove zero-width characters and control characters
-    text = re.sub(r'[\u200b-\u200f\u202a-\u202e\ufeff]', '', text)
-    
-    # Normalize whitespace
-    text = re.sub(r'[ \t]+', ' ', text)  # multiple spaces/tabs to single space
-    text = re.sub(r'\n{3,}', '\n\n', text)  # 3+ newlines to 2
-    
-    return text.strip()
-
-
 def extract_pdf_text(content: bytes) -> str:
-    """Extract text from PDF using PyMuPDF (better Arabic support)."""
-    import fitz  # PyMuPDF
+    """Extract text from PDF with proper Arabic handling."""
+    from services.arabic_text_service import extract_arabic_from_pdf
     
-    text_parts = []
-    doc = fitz.open(stream=content, filetype="pdf")
-    
-    try:
-        for page_num in range(len(doc)):
-            page = doc[page_num]
-            # Extract text with layout preservation
-            text = page.get_text("text")
-            if text.strip():
-                text_parts.append(text)
-    finally:
-        doc.close()
-    
-    raw_text = "\n\n".join(text_parts).strip()
-    return clean_arabic_text(raw_text)
+    result = extract_arabic_from_pdf(content)
+    return result.text
 
 
 def extract_epub_text(content: bytes) -> str:
