@@ -6,6 +6,7 @@ from typing import List, Optional
 
 from models.database import get_db, Chapter, Project
 from models.schemas import ChapterCreate, ChapterUpdate, ChapterResponse
+from services.arabic_text_service import arabic_service
 
 router = APIRouter()
 
@@ -25,6 +26,7 @@ def create_chapter(data: ChapterCreate, db: Session = Depends(get_db)):
     
     # Create chapter with auto-generated ID and order
     chapter_data = data.model_dump()
+    chapter_data["content"] = arabic_service.clean_arabic_text(chapter_data["content"]).text
     chapter_data["order_index"] = max_order or 0
     
     chapter = Chapter(**chapter_data)
@@ -67,6 +69,8 @@ def update_chapter(chapter_id: str, data: ChapterUpdate, db: Session = Depends(g
     
     # Update only provided fields
     update_data = data.model_dump(exclude_unset=True)
+    if "content" in update_data and update_data["content"] is not None:
+        update_data["content"] = arabic_service.clean_arabic_text(update_data["content"]).text
     for key, value in update_data.items():
         setattr(chapter, key, value)
     

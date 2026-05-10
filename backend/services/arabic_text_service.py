@@ -135,6 +135,9 @@ class ArabicTextService:
     
     def fix_disconnected_letters(self, text: str) -> str:
         """Fix disconnected Arabic letters (common in OCR)."""
+        if not re.search(r'([\u0600-\u06FF]\s+){3,}[\u0600-\u06FF]', text):
+            return text
+
         # Pattern: Arabic letter + space + Arabic letter
         # Replace with connected version
         pattern = re.compile(r'([\u0600-\u06FF])\s+([\u0600-\u06FF])')
@@ -152,6 +155,18 @@ class ArabicTextService:
                 break
             text = new_text
         
+        return text
+
+    def fix_lost_arabic_word_boundaries(self, text: str) -> str:
+        """Repair high-confidence Arabic word boundaries lost by PDF glyph extraction."""
+        replacements = {
+            "املجلداألول": "المجلد الأول",
+            "املجلدالأول": "المجلد الأول",
+            "المجلداالأول": "المجلد الأول",
+            "المجلدالأول": "المجلد الأول",
+        }
+        for bad, good in replacements.items():
+            text = text.replace(bad, good)
         return text
     
     def fix_visual_order(self, text: str) -> str:
@@ -259,6 +274,11 @@ class ArabicTextService:
         if fixed_order != text:
             text = fixed_order
             fixes.append("fixed_visual_order")
+
+        segmented = self.fix_lost_arabic_word_boundaries(text)
+        if segmented != text:
+            text = segmented
+            fixes.append("fixed_lost_word_boundaries")
 
         return ArabicProcessingResult(
             text=text,
