@@ -100,6 +100,62 @@ class TTSService:
                 engine=TTSEngine.EDGE,
                 quality="high"
             ),
+            "edge-fr": Voice(
+                id="edge-fr",
+                name="Microsoft French (Online)",
+                language="fr",
+                engine=TTSEngine.EDGE,
+                quality="high"
+            ),
+            "edge-es": Voice(
+                id="edge-es",
+                name="Microsoft Spanish (Online)",
+                language="es",
+                engine=TTSEngine.EDGE,
+                quality="high"
+            ),
+            "edge-de": Voice(
+                id="edge-de",
+                name="Microsoft German (Online)",
+                language="de",
+                engine=TTSEngine.EDGE,
+                quality="high"
+            ),
+            "edge-hi": Voice(
+                id="edge-hi",
+                name="Microsoft Hindi (Online)",
+                language="hi",
+                engine=TTSEngine.EDGE,
+                quality="high"
+            ),
+            "edge-zh": Voice(
+                id="edge-zh",
+                name="Microsoft Chinese (Online)",
+                language="zh",
+                engine=TTSEngine.EDGE,
+                quality="high"
+            ),
+            "edge-ru": Voice(
+                id="edge-ru",
+                name="Microsoft Russian (Online)",
+                language="ru",
+                engine=TTSEngine.EDGE,
+                quality="high"
+            ),
+            "edge-pt": Voice(
+                id="edge-pt",
+                name="Microsoft Portuguese (Online)",
+                language="pt",
+                engine=TTSEngine.EDGE,
+                quality="high"
+            ),
+            "edge-ja": Voice(
+                id="edge-ja",
+                name="Microsoft Japanese (Online)",
+                language="ja",
+                engine=TTSEngine.EDGE,
+                quality="high"
+            ),
         })
     
     def get_voices(self, language: Optional[str] = None) -> List[Voice]:
@@ -225,7 +281,21 @@ class TTSService:
         import asyncio
         
         async def _generate():
-            voice_name = "en-US-GuyNeural" if voice.language == "en" else "ar-SA-HamedNeural"
+            # Map language codes to Edge TTS voice names
+            edge_voices = {
+                "en": "en-US-GuyNeural",
+                "ar": "ar-SA-HamedNeural",
+                "fr": "fr-FR-DeniseNeural",
+                "es": "es-ES-ElviraNeural",
+                "de": "de-DE-KatjaNeural",
+                "hi": "hi-IN-SwaraNeural",
+                "zh": "zh-CN-XiaoxiaoNeural",
+                "ru": "ru-RU-SvetlanaNeural",
+                "pt": "pt-BR-FranciscaNeural",
+                "ja": "ja-JP-NanamiNeural",
+            }
+            
+            voice_name = edge_voices.get(voice.language, "en-US-GuyNeural")
             communicate = edge_tts.Communicate(text, voice_name)
             await communicate.save(str(output_path))
         
@@ -242,6 +312,14 @@ class TTSService:
         samples = {
             "en": "Hello! This is a preview of my voice. I can read any book you upload.",
             "ar": "مرحباً! هذا نموذج من صوتي. يمكنني قراءة أي كتاب تقوم برفعه.",
+            "fr": "Bonjour! Ceci est un aperçu de ma voix. Je peux lire n'importe quel livre que vous téléchargez.",
+            "es": "¡Hola! Esta es una vista previa de mi voz. Puedo leer cualquier libro que subas.",
+            "de": "Hallo! Dies ist eine Vorschau meiner Stimme. Ich kann jedes Buch lesen, das du hochlädst.",
+            "hi": "नमस्ते! यह मेरी आवाज का एक नमूना है। मैं किसी भी पुस्तक को पढ़ सकता हूं जो आप अपलोड करते हैं।",
+            "zh": "你好！这是我声音的预览。我可以阅读你上传的任何书籍。",
+            "ru": "Привет! Это образец моего голоса. Я могу прочитать любую книгу, которую вы загрузите.",
+            "pt": "Olá! Esta é uma amostra da minha voz. Posso ler qualquer livro que você carregar.",
+            "ja": "こんにちは！これは私の声のプレビューです。アップロードした本を音読できます。",
         }
         
         text = samples.get(voice.language, samples["en"])
