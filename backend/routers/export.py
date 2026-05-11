@@ -1,8 +1,10 @@
+"""Export router for audio export and background music."""
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session
+from sqlmodel import Session
 from pydantic import BaseModel
-from typing import Literal, Optional
+from typing import Optional, Literal
+import os
 
 from models.database import get_db, Project, Chapter
 from services.background_music_service import background_music_service

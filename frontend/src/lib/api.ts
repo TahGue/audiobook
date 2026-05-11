@@ -14,8 +14,7 @@ export const projectsApi = {
   update: (id: string, data: Partial<Project>) =>
     api.patch<Project>(`/projects/${id}/`, data).then(r => r.data),
   delete: (id: string) => api.delete(`/projects/${id}/`),
-  generateOneClickAudiobook: (projectId: string, data: {
-    document_path: string;
+  generateOneClickAudiobook: async (projectId: string, file: File, data: {
     voice_id: string;
     language?: string;
     format?: string;
@@ -24,7 +23,17 @@ export const projectsApi = {
     background_music_volume?: number;
     auto_split_chapters?: boolean;
     target_chapter_length?: number;
-  }) => api.post(`/projects/${projectId}/one-click`, data).then(r => r.data),
+  }) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('voice_id', data.voice_id)
+    if (data.language) formData.append('language', data.language)
+    if (data.format) formData.append('format', data.format)
+    if (data.quality) formData.append('quality', data.quality)
+    if (data.auto_split_chapters !== undefined) formData.append('auto_split_chapters', String(data.auto_split_chapters))
+    if (data.target_chapter_length) formData.append('target_chapter_length', String(data.target_chapter_length))
+    return api.post(`/projects/${projectId}/one-click`, formData).then(r => r.data)
+  },
   getOneClickStatus: (projectId: string) => api.get(`/projects/${projectId}/one-click/status`).then(r => r.data),
 }
 

@@ -6,7 +6,7 @@ from typing import List
 from pydantic import BaseModel
 
 from models.database import get_db, Chapter
-from models.schemas import TTSGenerateRequest
+from models.schemas import ChapterBase
 from services.tts_service import tts_service
 from services.voice_clone_service import voice_clone_service
 import os
@@ -80,7 +80,7 @@ def get_languages():
 def get_voices(language: str = "en"):
     """Get available voices for a language."""
     voices = VOICES.get(language, [])
-    return {"voices": voices}
+    return voices
 
 
 @router.post("/voice-profiles")

@@ -1,6 +1,6 @@
 """Projects router for project management."""
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlmodel import Session, select
 from pydantic import BaseModel
 from typing import Optional, List
@@ -94,7 +94,6 @@ def delete_project(project_id: str, db: Session = Depends(get_db)):
 
 
 class OneClickAudiobookRequest(BaseModel):
-    document_path: str
     voice_id: str
     language: str = "en"
     format: str = "mp3"
@@ -108,7 +107,13 @@ class OneClickAudiobookRequest(BaseModel):
 @router.post("/{project_id}/one-click")
 def generate_one_click_audiobook(
     project_id: str,
-    data: OneClickAudiobookRequest,
+    file: UploadFile = File(...),
+    voice_id: str = Form(...),
+    language: str = Form("en"),
+    format: str = Form("mp3"),
+    quality: str = Form("192k"),
+    auto_split_chapters: bool = Form(True),
+    target_chapter_length: int = Form(5000),
     db: Session = Depends(get_db)
 ):
     """Generate complete audiobook in one click."""
@@ -120,20 +125,32 @@ def generate_one_click_audiobook(
         raise HTTPException(status_code=404, detail="Project not found")
     
     try:
+        # Save uploaded file temporarily
+        import tempfile
+        import os
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename or "")[1]) as tmp_file:
+            tmp_file.write(file.file.read())
+            tmp_file_path = tmp_file.name
+        
         config = AudiobookConfig(
             project_id=project_id,
-            document_path=data.document_path,
-            voice_id=data.voice_id,
-            language=data.language,
-            format=data.format,
-            quality=data.quality,
-            add_background_music=data.add_background_music,
-            background_music_volume=data.background_music_volume,
-            auto_split_chapters=data.auto_split_chapters,
-            target_chapter_length=data.target_chapter_length
+            document_path=tmp_file_path,
+            voice_id=voice_id,
+            language=language,
+            format=format,
+            quality=quality,
+            add_background_music=False,
+            background_music_volume=50,
+            auto_split_chapters=auto_split_chapters,
+            target_chapter_length=target_chapter_length
         )
         
         result = one_click_audiobook_service.generate_audiobook(config)
+        
+        # Clean up temporary file
+        os.unlink(tmp_file_path)
+        
         return result
         
     except Exception as e:

@@ -56,4 +56,5 @@ opencv-python-headless>=4.8.0
 torch>=2.0.0         # PyTorch for GPU acceleration (OCR & Voice Cloning)
 
 # Phase 4 (Voice cloning)
-TTS==0.22.0          # XTTS v2 voice cloning
+# TTS library for voice cloning - optional, not required for core functionality
+# Install manually if needed: pip install TTS
