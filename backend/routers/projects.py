@@ -1,11 +1,14 @@
-"""Projects router using SQLModel."""
+"""Projects router for project management."""
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select, func
-from typing import List
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from sqlmodel import Session, select
+from pydantic import BaseModel
+from typing import Optional, List
 
 from models.database import get_db, Project, Chapter
 from models.schemas import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectListResponse
+from services.one_click_audiobook_service import one_click_audiobook_service, AudiobookConfig
+from sqlalchemy import func
 
 router = APIRouter()
 
@@ -88,3 +91,66 @@ def delete_project(project_id: str, db: Session = Depends(get_db)):
     
     db.delete(project)
     db.commit()
+
+
+class OneClickAudiobookRequest(BaseModel):
+    document_path: str
+    voice_id: str
+    language: str = "en"
+    format: str = "mp3"
+    quality: str = "192k"
+    add_background_music: bool = False
+    background_music_volume: int = 50
+    auto_split_chapters: bool = True
+    target_chapter_length: int = 5000
+
+
+@router.post("/{project_id}/one-click")
+def generate_one_click_audiobook(
+    project_id: str,
+    data: OneClickAudiobookRequest,
+    db: Session = Depends(get_db)
+):
+    """Generate complete audiobook in one click."""
+    # Verify project exists
+    statement = select(Project).where(Project.id == project_id)
+    project = db.exec(statement).first()
+    
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    try:
+        config = AudiobookConfig(
+            project_id=project_id,
+            document_path=data.document_path,
+            voice_id=data.voice_id,
+            language=data.language,
+            format=data.format,
+            quality=data.quality,
+            add_background_music=data.add_background_music,
+            background_music_volume=data.background_music_volume,
+            auto_split_chapters=data.auto_split_chapters,
+            target_chapter_length=data.target_chapter_length
+        )
+        
+        result = one_click_audiobook_service.generate_audiobook(config)
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{project_id}/one-click/status")
+def get_one_click_status(project_id: str):
+    """Get status of one-click audiobook generation."""
+    # Find the job for this project
+    job_id = None
+    for key in one_click_audiobook_service.status:
+        if key.startswith(f"audiobook_{project_id}"):
+            job_id = key
+            break
+    
+    if not job_id:
+        return {"status": "not_started", "message": "No generation job found"}
+    
+    return one_click_audiobook_service.get_status(job_id)

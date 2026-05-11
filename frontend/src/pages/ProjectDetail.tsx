@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Plus, Trash2, GripVertical, Download, Scissors } from 'lucide-react'
-import { projectsApi, chaptersApi, exportApi } from '../lib/api'
+import { ArrowLeft, Plus, Trash2, GripVertical, Download, Scissors, Zap } from 'lucide-react'
+import { projectsApi, chaptersApi, exportApi, ttsApi } from '../lib/api'
 import { Project } from '../types/audiobook'
 import PdfUpload from '../components/PdfUpload'
 import TTSControls from '../components/TTSControls'
@@ -36,6 +36,12 @@ export default function ProjectDetail() {
   const [showExportModal, setShowExportModal] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [extractedText, setExtractedText] = useState('')
+  const [showOneClickModal, setShowOneClickModal] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [generationProgress, setGenerationProgress] = useState(0)
+  const [generationStatus, setGenerationStatus] = useState('')
+  const [selectedVoice, setSelectedVoice] = useState('')
+  const [voices, setVoices] = useState<any[]>([])
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -45,8 +51,22 @@ export default function ProjectDetail() {
   )
 
   useEffect(() => {
-    if (id) loadProject()
+    if (id) {
+      loadProject()
+      loadVoices()
+    }
   }, [id])
+
+  const loadVoices = async () => {
+    if (!project) return
+    try {
+      const data = await ttsApi.getVoices(project.language)
+      setVoices(data)
+      if (data.length > 0) setSelectedVoice(data[0].id)
+    } catch (error) {
+      console.error('Failed to load voices:', error)
+    }
+  }
 
   const loadProject = async () => {
     if (!id) return
@@ -116,11 +136,60 @@ export default function ProjectDetail() {
         language: project?.language || 'en',
         target_length: 5000
       })
-      alert(`Created ${result.chapters_created} chapters`)
+      // Add the split chapters
+      for (const chapter of result.chapters) {
+        await chaptersApi.create({
+          title: chapter.title,
+          content: chapter.content,
+          project_id: id,
+          language: project?.language || 'en'
+        })
+      }
       loadProject()
     } catch (error) {
       console.error('Failed to auto-split:', error)
-      alert('Failed to auto-split text')
+    }
+  }
+
+  const handleOneClickGenerate = async () => {
+    if (!id || !extractedText || !selectedVoice) return
+    
+    setIsGenerating(true)
+    setGenerationProgress(0)
+    setGenerationStatus('Starting...')
+    
+    try {
+      await projectsApi.generateOneClickAudiobook(id, {
+        document_path: 'temp.pdf', // Would be the actual uploaded file
+        voice_id: selectedVoice,
+        language: project?.language || 'en',
+        format: 'mp3',
+        quality: '192k',
+        auto_split_chapters: true,
+        target_chapter_length: 5000
+      })
+      
+      // Poll for status
+      const interval = setInterval(async () => {
+        const status = await projectsApi.getOneClickStatus(id)
+        setGenerationProgress(status.progress || 0)
+        setGenerationStatus(status.current_step || '')
+        
+        if (status.status === 'completed') {
+          clearInterval(interval)
+          setIsGenerating(false)
+          loadProject()
+        } else if (status.status === 'failed') {
+          clearInterval(interval)
+          setIsGenerating(false)
+          alert('Generation failed: ' + status.error)
+        }
+      }, 2000)
+      
+    } catch (error) {
+      console.error('Failed to generate audiobook:', error)
+      setIsGenerating(false)
+      alert('Generation failed')
     }
   }
 
@@ -218,13 +287,25 @@ export default function ProjectDetail() {
           <ArrowLeft className="w-6 h-6 text-gray-600 dark:text-gray-400" />
         </Link>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex-1">{project.title}</h1>
-        <button
-          onClick={() => setShowExportModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-        >
-          <Download className="w-4 h-4" />
-          Export
-        </button>
+        <div className="flex gap-2">
+          {extractedText && (
+            <button
+              onClick={() => setShowOneClickModal(true)}
+              disabled={isGenerating}
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+            >
+              <Zap className="w-4 h-4" />
+              {isGenerating ? 'Generating...' : 'One-Click Audiobook'}
+            </button>
+          )}
+          <button
+            onClick={() => setShowExportModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Export
+          </button>
+        </div>
       </div>
 
       {showForm && (
@@ -296,6 +377,82 @@ export default function ProjectDetail() {
         onExport={handleExport}
         isExporting={isExporting}
       />
+
+      {showOneClickModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-xl max-w-md w-full">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Generate Entire Audiobook</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              This will automatically extract text, split into chapters, generate audio for all chapters, and export the final audiobook.
+            </p>
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Voice</label>
+                <select
+                  value={selectedVoice}
+                  onChange={(e) => setSelectedVoice(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  {voices.map((voice) => (
+                    <option key={voice.id} value={voice.id}>{voice.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Format</label>
+                <select className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                  <option value="mp3">MP3</option>
+                  <option value="wav">WAV</option>
+                  <option value="flac">FLAC</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quality</label>
+                <select className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                  <option value="128k">128 kbps</option>
+                  <option value="192k" selected>192 kbps</option>
+                  <option value="320k">320 kbps</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleOneClickGenerate}
+                disabled={!selectedVoice}
+                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+              >
+                Generate Audiobook
+              </button>
+              <button
+                onClick={() => setShowOneClickModal(false)}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isGenerating && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-xl max-w-md w-full">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Generating Audiobook</h2>
+            <div className="mb-4">
+              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                <div
+                  className="bg-purple-600 h-2 rounded-full transition-all"
+                  style={{ width: `${generationProgress}%` }}
+                />
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">{generationStatus} - {generationProgress}%</p>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Please wait while we extract, split, generate audio, and export your audiobook.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

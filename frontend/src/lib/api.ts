@@ -14,6 +14,18 @@ export const projectsApi = {
   update: (id: string, data: Partial<Project>) =>
     api.patch<Project>(`/projects/${id}/`, data).then(r => r.data),
   delete: (id: string) => api.delete(`/projects/${id}/`),
+  generateOneClickAudiobook: (projectId: string, data: {
+    document_path: string;
+    voice_id: string;
+    language?: string;
+    format?: string;
+    quality?: string;
+    add_background_music?: boolean;
+    background_music_volume?: number;
+    auto_split_chapters?: boolean;
+    target_chapter_length?: number;
+  }) => api.post(`/projects/${projectId}/one-click`, data).then(r => r.data),
+  getOneClickStatus: (projectId: string) => api.get(`/projects/${projectId}/one-click/status`).then(r => r.data),
 }
 
 export const chaptersApi = {
